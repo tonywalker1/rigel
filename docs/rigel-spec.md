@@ -33,7 +33,7 @@ AI-writable, human-readable code with first-class constraint-based generics.*
    differs.
 
 7. **No type aliases.** There is no `typedef` or type aliasing. If you want
-   a new name for an existing type, wrap it in a `deftype` with an invariant
+   a new name for an existing type, wrap it in a `type` form with an invariant
    or precondition. This eliminates bare aliases (which are technical debt)
    and nudges users toward encoding semantics. The language auto-generates
    default constructors, viewers, and release when not user-provided, keeping
@@ -43,6 +43,12 @@ AI-writable, human-readable code with first-class constraint-based generics.*
    `vec`, `map`, `set`) for the functional core. Contiguous mutable containers
    (`array`, `buffer`) for performance-critical paths. The runtime may use C++
    for high-quality implementations of both.
+
+9. **Declaration is separate from definition.** Naming (`let`) is orthogonal
+   to what is being named (a value, a lambda, a type). This eliminates the
+   asymmetries that arise when different kinds of definitions require different
+   keywords. One keyword names things; value-expression forms describe what
+   they are.
 
 ---
 
@@ -114,14 +120,14 @@ also serve as constraints in generic contexts.
 **Defaults are always the safe choice.** You opt into danger or performance explicitly:
 
 ```scheme
-(def [x : int32] 42)                         ; signed, checked (safe default)
-(def [y : int32 unsigned] 255)               ; unsigned, checked
-(def [z : int32 unchecked] 42)               ; signed, wrapping on overflow
-(def [w : int32 unsigned unchecked] 255)     ; unsigned, wrapping — "C-style"
+(let [x : int32] 42)                                ; signed, checked (safe default)
+(let [y : int32 unsigned] 255)                       ; unsigned, checked
+(let [z : int32 unchecked] 42)                       ; signed, wrapping on overflow
+(let [w : int32 unsigned unchecked] 255)             ; unsigned, wrapping — "C-style"
 
-(def mut [counter : int64] 0)                        ; mutable, ref-counted (safe default)
-(def mut [buf : (array float64 unique)] (array-new)) ; unique owner, no ref-count overhead
-(def mut [shared : int64 atomic] 0)                  ; atomic ref-count, thread-safe
+(let [counter : int64 mut] 0)                        ; mutable, ref-counted (safe default)
+(let [buf : (array float64 unique) mut] (array-new)) ; unique owner, no ref-count overhead
+(let [shared : int64 atomic mut] 0)                  ; atomic ref-count, thread-safe
 ```
 
 ### 2.3 Constraint-Based Generics
@@ -132,15 +138,15 @@ type parameters.
 
 ```scheme
 ;; CONCRETE: fully specified, allocates exactly 4 bytes
-(def (add-saturating [a : int32] [b : int32]) -> int32
+(let add-saturating (lambda [a : int32] [b : int32]) -> int32
   (saturating-add a b))
 
 ;; GENERIC: int constraint — works for any signed checked integer
-(def (add [a : int] [b : int]) -> int
+(let add (lambda [a : int] [b : int]) -> int
   (+ a b))
 
 ;; GENERIC: number constraint — works for any numeric type
-(def (sum [xs : (list number)]) -> number
+(let sum (lambda [xs : (list number)]) -> number
   (fold + (cast 0 number) xs))
 ```
 
@@ -154,18 +160,18 @@ The syntax uses `as` to capture the resolved type:
 
 ```scheme
 ;; T is bound to whatever concrete type matches `int`
-(def (add [a : int as T] [b : T]) -> T
+(let add (lambda [a : int as T] [b : T]) -> T
   (+ a b))
 
 ;; Multiple labels
-(def (convert [src : int as S] [dst-type : (type-of float as D)]) -> D
+(let convert (lambda [src : int as S] [dst-type : (type-of float as D)]) -> D
   (cast src D))
 
 ;; Label with compound constraint
-(def (hash-insert [k : (& hashable eq) as K]
-                     [v : any as V]
-                     [m : (map K V)]) -> (map K V)
-  ...)
+(let hash-insert (lambda [k : (& hashable eq) as K]
+                         [v : any as V]
+                         [m : (map K V)]) -> (map K V)
+  ...))
 ```
 
 **Scoping rule:** A type label is visible from its introduction point to the
@@ -173,68 +179,68 @@ end of the enclosing form. Labels do not escape their defining scope.
 
 ### 2.5 User-Defined Types
 
-Users define new concrete types using `deftype`. Types are **opaque by
-default** — fields are not directly accessible from outside. Interaction is
-through declared operations only (see §8b for full details).
+Users define new concrete types using `type` inside a `let` binding. Types are
+**opaque by default** — fields are not directly accessible from outside.
+Interaction is through declared operations only (see §8b for full details).
 
 ```scheme
 ;; A concrete struct type — opaque by default
-(deftype point2d
+(let point2d (type
   [x : float64]
   [y : float64]
 
   :construct
-  (def (point [x : float64] [y : float64]) -> point2d
+  (let point (lambda [x : float64] [y : float64]) -> point2d
     (point2d x y))
 
   :viewers
-  [(def (x [self : point2d]) -> float64 (.x self))
-   (def (y [self : point2d]) -> float64 (.y self))]
+  [(let x (lambda [self : point2d]) -> float64 (.x self))
+   (let y (lambda [self : point2d]) -> float64 (.y self))]
 
   :methods
-  [(def (distance [self : point2d] [other : point2d]) -> float64
+  [(let distance (lambda [self : point2d] [other : point2d]) -> float64
      (sqrt (+ (pow (- (.x other) (.x self)) 2.0)
-              (pow (- (.y other) (.y self)) 2.0))))])
+              (pow (- (.y other) (.y self)) 2.0))))]))
 
 ;; An enum / tagged union
-(deftype (option T)
+(let option (type [T]
   (some [value : T])
-  (none))
+  (none)))
 
 ;; A user-defined numeric type that satisfies `number`
-(deftype fixed-point-32
+(let fixed-point-32 (type
   :opaque
   [raw : int32]
   :satisfies (number)
 
   :construct
-  (def (from-int [n : int32]) -> fixed-point-32
+  (let from-int (lambda [n : int32]) -> fixed-point-32
     (fixed-point-32 (* n 256)))    ; 8-bit fractional part
 
   :viewers
-  [(def (to-float [self : fixed-point-32]) -> float64
+  [(let to-float (lambda [self : fixed-point-32]) -> float64
      (/ (int-to-float (.raw self)) 256.0))]
 
   :methods
-  [(def (add [self : fixed-point-32] [other : fixed-point-32])
+  [(let add (lambda [self : fixed-point-32] [other : fixed-point-32])
        -> fixed-point-32
-     (fixed-point-32 (+ (.raw self) (.raw other))))])
+     (fixed-point-32 (+ (.raw self) (.raw other))))]))
 ```
 
 Users can also define new **constraints** (analogous to type classes/traits):
 
 ```scheme
 ;; Define a constraint
-(defconstraint serializable
+(let serializable (constraint
   (serialize [self : Self]) -> (list int8 unsigned)
-  (deserialize [data : (list int8 unsigned)]) -> Self)
+  (deserialize [data : (list int8 unsigned)]) -> Self))
 
 ;; Declare that a type satisfies it
 (implement serializable for point2d
-  (def (serialize [self : point2d]) -> (list int8 unsigned)
-    ...)
-  (def (deserialize [data : (list int8 unsigned)]) -> point2d
+  (let serialize (lambda [self : point2d]) -> (list int8 unsigned)
     ...))
+  (let deserialize (lambda [data : (list int8 unsigned)]) -> point2d
+    ...)))
 ```
 
 ### 2.6 Constraint Composition
@@ -244,41 +250,42 @@ constraint can:
 
 ```scheme
 ;; K must satisfy both hashable and eq
-(def (lookup [k : (& hashable eq) as K]
-                [m : (map K any)]) -> (option any)
-  ...)
+(let lookup (lambda [k : (& hashable eq) as K]
+                    [m : (map K any)]) -> (option any)
+  ...))
 
 ;; Named compound constraint
-(defconstraint map-key (& hashable eq comparable))
+(let map-key (constraint (& hashable eq comparable)))
 ```
 
 ---
 
 ## 3. Core Forms
 
-### 3.1 The Unified `def`
+### 3.1 Bindings With `let`
 
-Rigel uses a single keyword — `def` — for all bindings: variables, mutations,
-and functions. The parser disambiguates structurally:
+Rigel uses `let` to bind a name to a value. Naming (declaration) is separate
+from what is being named (definition) — `let` handles the naming, and the
+value expression describes what the thing is.
 
 ```scheme
-;; Immutable binding: (def [name : type] value)
-(def [x : int32] 42)
+;; Immutable binding: (let [name : type] value)
+(let [x : int32] 42)
 
-;; Mutable binding: (def mut [name : type] value)
-(def mut [counter : int64] 0)
+;; Mutable binding: mut qualifier inside the bracket
+(let [counter : int64 mut] 0)
 
-;; Reassignment of mutable: (def name value)
-(def counter (+ counter 1))
+;; Reassignment of mutable: (set name value)
+(set counter (+ counter 1))
 
 ;; Multiple bindings (scoped)
-(def ([x : int32] 1
+(let ([x : int32] 1
       [y : int32] 2)
   (+ x y))
 
 ;; Type inference permitted when unambiguous
-(def [x] 42)            ; inferred as int64 (default literal type)
-(def [x : int32] 42)    ; explicit — preferred style
+(let [x] 42)            ; inferred as int64 (default literal type)
+(let [x : int32] 42)    ; explicit — preferred style
 ```
 
 **Disambiguation rules** (the parser checks structurally, no ambiguity in
@@ -286,30 +293,74 @@ S-expressions):
 
 | Form | Meaning |
 |------|---------|
-| `(def [name : type] expr)` | Immutable binding |
-| `(def mut [name : type] expr)` | Mutable binding |
-| `(def name expr)` | Reassign existing mutable (compile error if immutable) |
-| `(def (name params...) -> type body...)` | Named function |
-| `(def ([bindings...]) body...)` | Scoped let-block |
+| `(let [name : type] expr)` | Immutable binding |
+| `(let [name : type mut] expr)` | Mutable binding |
+| `(set name expr)` | Reassign existing mutable (compile error if immutable) |
+| `(let name (lambda params...) -> type body...)` | Named function |
+| `(let ([bindings...]) body...)` | Scoped let-block |
 
-### 3.2 Functions
+### 3.2 Functions and Closures
+
+Functions are lambdas bound with `let`. There is no separate function keyword
+— a "function" is a named lambda that does not capture state. A closure is a
+lambda that captures bindings from its environment.
 
 ```scheme
-;; Named function
-(def (add [a : int32] [b : int32]) -> int32
+;; Named function (a lambda bound to a name)
+(let add (lambda [a : int32] [b : int32]) -> int32
   (+ a b))
 
 ;; Generic function with constraint
-(def (add [a : number as T] [b : T]) -> T
+(let add (lambda [a : number as T] [b : T]) -> T
   (+ a b))
 
-;; Lambda — separate form since it's a value, not a binding
-(lambda ([x : int32]) -> int32
+;; Anonymous lambda
+(lambda [x : int32]) -> int32
   (* x x))
 
 ;; Higher-order function
-(def (apply-twice [f : (-> T T)] [x : any as T]) -> T
+(let apply-twice (lambda [f : (-> T T)] [x : any as T]) -> T
   (f (f x)))
+```
+
+**Closures and Explicit Captures**
+
+Captures are declared explicitly using `:capture`. The compiler does not
+silently close over variables — all captured state is visible in the lambda's
+signature:
+
+```scheme
+;; No captures — a pure function
+(let add (lambda [a : int32] [b : int32]) -> int32
+  (+ a b))
+
+;; Explicit capture — closes over `total`
+(let [total : int64 mut] 0)
+(let accumulate (lambda :capture [total mut] [value : int64]) -> int64
+  (set total (+ total value))
+  total))
+```
+
+Captures are listed after `:capture` and distinguished from arguments by the
+absence of a type annotation — they close over an existing binding. The `mut`
+qualifier on a capture allows mutation of the captured state. Without `mut`,
+the capture is an immutable snapshot at the point of closure creation.
+
+**Design rationale:** Explicit captures mean:
+- The compiler knows exactly what's closed over — no escape analysis needed
+- Stateful functions are just closures with mutable captures — no `static`
+  keyword needed
+- Captures are visible in the signature — readers see the full state shape
+
+**Self-capture for recursion** is analogous to C++'s `this` pointer — a
+recursive lambda captures its own binding:
+
+```scheme
+;; Self-referencing closure (recursive lambda)
+(let factorial (lambda :capture [factorial] [n : int64]) -> int64
+  (if (<= n 1)
+    1
+    (* n (factorial (- n 1))))))
 ```
 
 **Function type syntax:** `(-> arg-types... return-type)`
@@ -351,20 +402,20 @@ mechanism. Standard higher-order functions for collection processing:
 
 ```scheme
 ;; Map, filter, fold — the workhorses
-(map (lambda ([x : int32]) -> int32 (* x 2)) my-list)
-(filter (lambda ([x : int32]) -> bool (> x 0)) my-list)
+(map (lambda [x : int32]) -> int32 (* x 2)) my-list)
+(filter (lambda [x : int32]) -> bool (> x 0)) my-list)
 (fold + 0 my-list)
 
 ;; Explicit recursion (tail-call optimized)
-(def (factorial [n : int64]) -> int64
-  (def (go [acc : int64] [i : int64]) -> int64
+(let factorial (lambda [n : int64]) -> int64
+  (let go (lambda [acc : int64] [i : int64]) -> int64
     (if (<= i 1)
       acc
       (go (* acc i) (- i 1))))
-  (go 1 n))
+  (go 1 n)))
 
 ;; For-each with side effects (returns unit)
-(for-each (lambda ([x : int32]) -> unit (print x)) my-list)
+(for-each (lambda [x : int32]) -> unit (print x)) my-list)
 ```
 
 ### 3.5 Data Structures
@@ -373,19 +424,19 @@ mechanism. Standard higher-order functions for collection processing:
 
 ```scheme
 ;; List (persistent linked list)
-(def [xs : (list int32)] '(1 2 3 4))
-(def [ys : (list int32)] (cons 0 xs))    ; xs is unchanged
+(let [xs : (list int32)] '(1 2 3 4))
+(let [ys : (list int32)] (cons 0 xs))    ; xs is unchanged
 
 ;; Vec (persistent indexed — RRB-tree internally)
-(def [v : (vec int32)] [1 2 3 4])
-(def [w : (vec int32)] (assoc v 2 99))   ; v is unchanged, w has 99 at index 2
+(let [v : (vec int32)] [1 2 3 4])
+(let [w : (vec int32)] (assoc v 2 99))   ; v is unchanged, w has 99 at index 2
 
 ;; Map (persistent — HAMT internally)
-(def [m : (map string int32)] {"alice" 1 "bob" 2})
-(def [n : (map string int32)] (assoc m "carol" 3))
+(let [m : (map string int32)] {"alice" 1 "bob" 2})
+(let [n : (map string int32)] (assoc m "carol" 3))
 
 ;; Set (persistent — HAMT internally)
-(def [s : (set int32)] #{1 2 3})
+(let [s : (set int32)] #{1 2 3})
 ```
 
 #### Contiguous (Mutable) — Performance Path
@@ -397,28 +448,28 @@ arrays. The runtime implementation may use C++ (e.g., bounds-checked
 
 ```scheme
 ;; Fixed-size array — stack allocated when size is compile-time known
-(def [pixels : (array int8 unsigned 1024)] (array-zero 1024))
+(let [pixels : (array int8 unsigned 1024)] (array-zero 1024))
 
 ;; Dynamic array — heap allocated, growable
-(def mut [buf : (array int8 unsigned)] (array-new))
+(let [buf : (array int8 unsigned) mut] (array-new))
 (array-push! buf 42)
 (array-push! buf 43)
-(def [len : int64] (array-length buf))
-(def [val : int8 unsigned] (array-get buf 0))    ; bounds-checked by default
+(let [len : int64] (array-length buf))
+(let [val : int8 unsigned] (array-get buf 0))    ; bounds-checked by default
 
 ;; Unchecked access for inner loops (explicit opt-in to danger)
-(def [val : int8 unsigned] (array-get-unchecked buf 0))
+(let [val : int8 unsigned] (array-get-unchecked buf 0))
 
 ;; Slice — a fat pointer: (ptr, len, shared-ref-to-parent)
 ;; The shared reference keeps the parent's backing store alive for the slice's lifetime.
-(def [window : (slice int8 unsigned)] (array-slice buf 10 20))
+(let [window : (slice int8 unsigned)] (array-slice buf 10 20))
 
 ;; Array from persistent vec (copies into contiguous memory)
-(def [flat : (array int32)] (array-from-vec my-vec))
+(let [flat : (array int32)] (array-from-vec my-vec))
 
 ;; Iterate contiguous memory (cache-friendly)
 (array-for-each
-  (lambda ([i : int64] [val : int8 unsigned]) -> unit
+  (lambda [i : int64] [val : int8 unsigned]) -> unit
     (process val))
   buf)
 ```
@@ -441,10 +492,10 @@ arrays. The runtime implementation may use C++ (e.g., bounds-checked
 
 ```scheme
 ;; Buffer for I/O operations — contiguous, byte-oriented
-(def mut [out : (buffer)] (buffer-new 4096))
+(let [out : (buffer) mut] (buffer-new 4096))
 (buffer-write! out b"HTTP/1.1 200 OK\r\n")
 (buffer-write! out (serialize response))
-(def [data : bytes] (buffer-freeze out))   ; immutable snapshot
+(let [data : bytes] (buffer-freeze out))   ; immutable snapshot
 ```
 
 ---
@@ -463,9 +514,9 @@ not user-provided, so the wrapping cost is minimal:
 ;; (typedef port-number int16 unsigned)
 
 ;; GOOD: wrap with an invariant — the compiler does the rest
-(deftype port-number
+(let port-number (type
   [value : int16 unsigned]
-  :invariant (and (>= value 0) (<= value 65535)))
+  :invariant (and (>= value 0) (<= value 65535))))
 
 ;; The compiler auto-generates:
 ;;   - constructor: (port-number 8080) -> port-number
@@ -474,24 +525,24 @@ not user-provided, so the wrapping cost is minimal:
 ;;   - release: no-op (value type, no resources)
 
 ;; Usage
-(def [http : port-number] (port-number 80))       ; ok
-(def [bad  : port-number] (port-number 70000))     ; compile-time error (literal)
-(def [dyn  : port-number] (port-number user-input)) ; runtime check, raises fail
+(let [http : port-number] (port-number 80))       ; ok
+(let [bad  : port-number] (port-number 70000))     ; compile-time error (literal)
+(let [dyn  : port-number] (port-number user-input)) ; runtime check, raises fail
 
 ;; Another example: positive integer
-(deftype positive-int
+(let positive-int (type
   [value : int64]
-  :invariant (> value 0))
+  :invariant (> value 0)))
 
 ;; Non-empty string
-(deftype non-empty-string
+(let non-empty-string (type
   [value : string]
-  :invariant (> (str-length value) 0))
+  :invariant (> (str-length value) 0)))
 
 ;; Percentage (0.0 to 1.0)
-(deftype proportion
+(let proportion (type
   [value : float64]
-  :invariant (and (>= value 0.0) (<= value 1.0)))
+  :invariant (and (>= value 0.0) (<= value 1.0))))
 ```
 
 **Why this matters:**
@@ -503,7 +554,7 @@ not user-provided, so the wrapping cost is minimal:
 - **Runtime checking otherwise.** Dynamic values are checked at construction
   time, using the `fail` effect for violations.
 - **Technical debt becomes visible.** If you find yourself writing
-  `(deftype foo [value : int64])` with no invariant, the absence of an
+  `(let foo (type [value : int64]))` with no invariant, the absence of an
   invariant is a conscious choice, not an oversight.
 
 ---
@@ -516,22 +567,22 @@ not user-provided, so the wrapping cost is minimal:
 (module math.vector
   :exports (vec2 dot cross magnitude normalize))
 
-(deftype vec2
+(let vec2 (type
   :opaque
   [x : float64]
   [y : float64]
 
   :construct
-  (def (vec2-new [x : float64] [y : float64]) -> vec2
+  (let vec2-new (lambda [x : float64] [y : float64]) -> vec2
     (vec2 x y))
 
   :viewers
-  [(def (x [self : vec2]) -> float64 (.x self))
-   (def (y [self : vec2]) -> float64 (.y self))])
+  [(let x (lambda [self : vec2]) -> float64 (.x self))
+   (let y (lambda [self : vec2]) -> float64 (.y self))]))
 
-(def (dot [a : vec2] [b : vec2]) -> float64
+(let dot (lambda [a : vec2] [b : vec2]) -> float64
   (+ (* (x a) (x b))
-     (* (y a) (y b))))
+     (* (y a) (y b)))))
 ```
 
 ```scheme
@@ -541,11 +592,11 @@ not user-provided, so the wrapping cost is minimal:
 (import math.vector :only (dot cross))
 (import io)
 
-(def (main) -> int32
-  (def [a : vec.vec2] (vec.vec2-new 1.0 2.0))
-  (def [b : vec.vec2] (vec.vec2-new 3.0 4.0))
+(let main (lambda) -> int32
+  (let [a : vec.vec2] (vec.vec2-new 1.0 2.0))
+  (let [b : vec.vec2] (vec.vec2-new 3.0 4.0))
   (io.println (dot a b))
-  0)
+  0))
 ```
 
 ---
@@ -649,10 +700,10 @@ static inline int32_t rigel_add_i32_unchecked(int32_t a, int32_t b) {
 ### 6.3 Immutability
 
 ```c
-// (def [x : int32] 42) generates:
+// (let [x : int32] 42) generates:
 const int32_t x = 42;
 
-// (def mut [y : int32] 0) generates:
+// (let [y : int32 mut] 0) generates:
 int32_t y = 0;
 ```
 
@@ -692,19 +743,19 @@ int64_t rigel_factorial(int64_t n) {
 
 ```scheme
 ;; UTF-8 string — immutable, length-prefixed
-(def [name : string] "hello")
+(let [name : string] "hello")
 
 ;; Byte string — raw bytes
-(def [data : bytes] b"raw bytes here")
+(let [data : bytes] b"raw bytes here")
 
 ;; Char — a single Unicode scalar value (not a byte)
-(def [c : char] 'λ')
+(let [c : char] 'λ')
 
 ;; String operations return new strings (immutable)
-(def [greeting : string] (str-concat "hello, " name))
-(def [upper : string] (str-upper name))
-(def [len : int64] (str-length name))       ; character count, not byte count
-(def [byte-len : int64] (str-byte-length name))
+(let [greeting : string] (str-concat "hello, " name))
+(let [upper : string] (str-upper name))
+(let [len : int64] (str-length name))       ; character count, not byte count
+(let [byte-len : int64] (str-byte-length name))
 ```
 
 ---
@@ -730,19 +781,19 @@ handled somewhere up the call stack:
 
 ```scheme
 ;; An effect is a set of operations that a function may perform
-(defeffect fail
-  (raise [msg : string]) -> never)
+(let fail (effect
+  (raise [msg : string]) -> never))
 
-(defeffect io
+(let io (effect
   (read-file [path : string]) -> (result string io-error)
   (write-file [path : string] [data : string]) -> (result unit io-error)
-  (println [msg : string]) -> unit)
+  (println [msg : string]) -> unit))
 
-(defeffect yield
-  (yield [value : T]) -> unit)
+(let yield (effect
+  (yield [value : T]) -> unit))
 
-(defeffect ask
-  (ask) -> T)            ; like Reader monad — request a value from context
+(let ask (effect
+  (ask) -> T))            ; like Reader monad — request a value from context
 ```
 
 ### 8.3 Performing Effects
@@ -751,17 +802,17 @@ Functions declare which effects they may perform using `with`:
 
 ```scheme
 ;; This function may fail and do I/O
-(def (read-config [path : string]) -> config
+(let read-config (lambda [path : string]) -> config
   :with (fail io)
-  (def [content : string]
+  (let [content : string]
     (match (read-file path)
       [(ok s)   s]
       [(err e)  (raise (str-concat "cannot read: " path))]))
-  (def [parsed : (result config string)]
+  (let [parsed : (result config string)]
     (parse-toml content))
   (match parsed
     [(ok cfg)  cfg]
-    [(err msg) (raise msg)]))
+    [(err msg) (raise msg)])))
 ```
 
 The `:with` clause is part of the type signature. A function that performs
@@ -770,13 +821,13 @@ clause is **pure** — the type system guarantees it.
 
 ```scheme
 ;; Pure function — no effects, compiler enforces this
-(def (add [a : int64] [b : int64]) -> int64
+(let add (lambda [a : int64] [b : int64]) -> int64
   (+ a b))
 
 ;; This would be a compile error — println performs io:
-;; (def (sneaky [x : int64]) -> int64
+;; (let sneaky (lambda [x : int64]) -> int64
 ;;   (io.println "side effect!")   ; ERROR: performs `io` but not declared
-;;   x)
+;;   x))
 ```
 
 ### 8.4 Handling Effects
@@ -817,17 +868,17 @@ wrapped in handlers one at a time, peeling off layers:
 
 ```scheme
 ;; A pipeline that reads files, may fail, and yields intermediate results
-(def (process-files [paths : (list string)]) -> unit
+(let process-files (lambda [paths : (list string)]) -> unit
   :with (fail io yield)
   (for-each
-    (lambda ([p : string]) -> unit
+    (lambda [p : string]) -> unit
       :with (fail io yield)
-      (def [content : string]
+      (let [content : string]
         (match (read-file p)
           [(ok s)   s]
           [(err e)  (raise (str-concat "failed: " p))]))
       (yield content))
-    paths))
+    paths)))
 
 ;; Compose handlers — each peels off one effect layer
 (handle yield in
@@ -906,11 +957,11 @@ mechanism. A handler can convert between them:
 
 ```scheme
 ;; Convert effectful code to a result value
-(def (try-read-config [path : string]) -> (result config string)
+(let try-read-config (lambda [path : string]) -> (result config string)
   :with (io)
   (handle fail in
     (ok (read-config path))
-    :on [(raise msg) (err msg)]))
+    :on [(raise msg) (err msg)])))
 ```
 
 ---
@@ -924,30 +975,30 @@ external code. All interaction with a type's internals goes through explicitly
 defined operations:
 
 ```scheme
-(deftype connection
+(let connection (type
   :opaque                         ; default, but explicit for clarity
   [handle : int64]
   [state  : (ref connection-state)]
-  
+
   :construct
-  (def (connect [host : string] [port : int16 unsigned]) -> connection
+  (let connect (lambda [host : string] [port : int16 unsigned]) -> connection
     :with (fail io)
-    (def [h : int64] (tcp-connect host port))
-    (connection h (ref (connected))))
+    (let [h : int64] (tcp-connect host port))
+    (connection h (ref (connected)))))
 
   :methods
-  [(def (send [self : connection] [data : bytes]) -> (result int64 io-error)
+  [(let send (lambda [self : connection] [data : bytes]) -> (result int64 io-error)
      :with (io)
-     ...)
-   (def (is-connected [self : connection]) -> bool
+     ...))
+   (let is-connected (lambda [self : connection]) -> bool
      (match (deref (.state self))    ; .field access only inside methods
        [(connected) true]
-       [_           false]))]
+       [_           false])))]
 
   :release
-  (def (release [self : connection]) -> unit
+  (lambda [self : connection]) -> unit
     :with (io)
-    (tcp-close (.handle self))))
+    (tcp-close (.handle self)))))
 ```
 
 **Inside methods:** `.field` access works — the type can see its own guts.
@@ -961,13 +1012,13 @@ The `:release` block defines cleanup that runs automatically when a value
 goes out of scope, analogous to C++ destructors and Rust's `Drop`:
 
 ```scheme
-(def (do-work [host : string]) -> unit
+(let do-work (lambda [host : string]) -> unit
   :with (fail io)
-  (def [conn : connection] (connect host 8080))
+  (let [conn : connection] (connect host 8080))
   ;; use conn...
   (send conn b"hello")
   ;; conn.release is called automatically here, even if (send) raised
-  )
+  ))
 ```
 
 The compiler inserts release calls at scope exit, including all early-exit
@@ -992,41 +1043,41 @@ There is **no inheritance** in Rigel. Code reuse is through:
 ```scheme
 ;; No inheritance — use containment + constraints
 
-(deftype buffered-connection
+(let buffered-connection (type
   :opaque
   [inner : connection]
   [buffer : (mut-vec int8 unsigned)]
 
   :construct
-  (def (buffered-connect [host : string] [port : int16 unsigned])
+  (let buffered-connect (lambda [host : string] [port : int16 unsigned])
       -> buffered-connection
     :with (fail io)
-    (buffered-connection (connect host port) (mut-vec-new)))
+    (buffered-connection (connect host port) (mut-vec-new))))
 
   :methods
-  [(def (send [self : buffered-connection] [data : bytes])
+  [(let send (lambda [self : buffered-connection] [data : bytes])
        -> (result int64 io-error)
      :with (io)
      ;; buffer, then flush
      (push-all! (.buffer self) data)
      (when (> (length (.buffer self)) 4096)
        (flush self))
-     (ok (byte-length data)))
+     (ok (byte-length data))))
 
-   (def (flush [self : buffered-connection]) -> (result unit io-error)
+   (let flush (lambda [self : buffered-connection]) -> (result unit io-error)
      :with (io)
-     (def [result : (result int64 io-error)]
+     (let [result : (result int64 io-error)]
        (send (.inner self) (freeze (.buffer self))))
      (clear! (.buffer self))
      (match result
        [(ok _)  (ok unit)]
-       [(err e) (err e)]))]
+       [(err e) (err e)])))]
 
   :release
-  (def (release [self : buffered-connection]) -> unit
+  (lambda [self : buffered-connection]) -> unit
     :with (io)
     ;; flush remaining, then inner connection cleans up automatically
-    (ignore (flush self))))
+    (ignore (flush self)))))
     ;; (.inner self) release is called automatically (nested RAII)
 ```
 
@@ -1037,24 +1088,24 @@ making fields public, define **viewer** functions that return immutable
 copies or computed values:
 
 ```scheme
-(deftype sensor-reading
+(let sensor-reading (type
   :opaque
   [timestamp : int64 unsigned]
   [value     : float64]
   [quality   : int8 unsigned]
 
   :construct
-  (def (reading [ts : int64 unsigned] [val : float64] [q : int8 unsigned])
+  (let reading (lambda [ts : int64 unsigned] [val : float64] [q : int8 unsigned])
       -> sensor-reading
-    (sensor-reading ts val q))
+    (sensor-reading ts val q)))
 
   :viewers                           ; read-only projections
-  [(def (timestamp [self : sensor-reading]) -> int64 unsigned
-     (.timestamp self))
-   (def (value [self : sensor-reading]) -> float64
-     (.value self))
-   (def (is-valid [self : sensor-reading]) -> bool
-     (> (.quality self) 50))])       ; computed, not raw field
+  [(let timestamp (lambda [self : sensor-reading]) -> int64 unsigned
+     (.timestamp self)))
+   (let value (lambda [self : sensor-reading]) -> float64
+     (.value self)))
+   (let is-valid (lambda [self : sensor-reading]) -> bool
+     (> (.quality self) 50)))]))       ; computed, not raw field
 ```
 
 Viewers are callable from outside but cannot modify the value. The distinction
@@ -1072,10 +1123,10 @@ out of the effect system and ownership rules. Spawning a task is a side effect,
 so it belongs in the effect system:
 
 ```scheme
-(defeffect concurrent
-  (spawn [f : (-> T)] ) -> (task T)
+(let concurrent (effect
+  (spawn [f : (-> T)]) -> (task T)
   (await [t : (task T)]) -> T
-  (await-all [ts : (list (task T))]) -> (list T))
+  (await-all [ts : (list (task T))]) -> (list T)))
 ```
 
 A function that spawns work must declare `:with (concurrent)`. A function without
@@ -1089,8 +1140,8 @@ discipline:
 
 ```scheme
 (handle concurrent in
-  (def a (spawn (fetch-users)))
-  (def b (spawn (fetch-orders)))
+  (let a (spawn (fetch-users)))
+  (let b (spawn (fetch-orders)))
   (merge-results (await a) (await b))
   ;; handler scope ends here — all spawned tasks
   ;; MUST be complete or cancelled. enforced statically.
@@ -1110,12 +1161,12 @@ A thread is a closure plus a path of execution. `main` is no different — it is
 simply the task that receives the root `concurrent` handler from the runtime:
 
 ```scheme
-(def (main [args : (vec string)]) -> int32
+(let main (lambda [args : (vec string)]) -> int32
   :with (io concurrent fail)
-  (def server (spawn (listen config)))
-  (def worker (spawn (process-queue queue)))
+  (let server (spawn (listen config)))
+  (let worker (spawn (process-queue queue)))
   (await-all (list server worker))
-  0)
+  0))
 ```
 
 On a microcontroller with no OS threads, the `concurrent` handler runs tasks
@@ -1128,18 +1179,18 @@ Channels are the primary coordination primitive. The existing ownership system
 enforces safety with no additional rules:
 
 ```scheme
-(def (producer [ch : (channel int32)]) -> unit
+(let producer (lambda [ch : (channel int32)]) -> unit
   :with (concurrent io)
   (loop [i 0]
     (channel-send ch i)
-    (recur (+ i 1))))
+    (recur (+ i 1)))))
 
-(def (consumer [ch : (channel int32)]) -> unit
+(let consumer (lambda [ch : (channel int32)]) -> unit
   :with (concurrent io)
   (loop []
-    (def val (channel-recv ch))
+    (let val (channel-recv ch))
     (log "got: {val}")
-    (recur)))
+    (recur))))
 ```
 
 **Safety from existing ownership rules:**
@@ -1159,11 +1210,11 @@ observe side effects. This enables safe automatic parallelism:
 
 ```scheme
 ;; pure — no :with
-(def (expensive [x : int64]) -> int64
+(let expensive (lambda [x : int64]) -> int64
   (fib x))
 
 ;; explicit parallel map — compiler verifies purity of argument function
-(def results (par-map data expensive))
+(let results (par-map data expensive))
 ```
 
 `par-map` requires its function argument to be pure (no `:with` clause). This is
@@ -1249,6 +1300,27 @@ handlers (§8.7), extended with task scheduling state.
    Channels for communication (ownership-aware). `par-map` for pure parallel
    computation. Main is a task. See §9.
 
+10. **One language, two forms.** Compiled and interpreted execution share
+    identical syntax and semantics. There are no interpreter-only language
+    features. The interpreter is the compiler minus the C emission step — it
+    type-checks, monomorphizes, and executes in memory rather than emitting
+    code. This makes the interpreter a natural test oracle for the compiler:
+    same input must produce same output. If pressure to add dynamic features
+    (e.g., `eval`) materializes in the future, the effect system provides a
+    principled extension point without forking the language.
+
+11. **Declaration separate from definition.** `let` binds names to values.
+    There is no unified `def` keyword. Functions are lambdas bound with `let`.
+    Types, constraints, and effects are value-like definitions bound with `let`.
+    Reassignment uses `set`. This separation eliminates asymmetries between
+    different kinds of definitions and makes the language more orthogonal.
+
+12. **Unified function/closure model.** Functions and lambdas are the same
+    construct — `lambda`. A "function" is a lambda with no captures. Closures
+    use `:capture` to explicitly declare what they close over. Self-capture
+    enables recursion. No separate `function` keyword or `static` keyword
+    needed.
+
 ### Open
 
 1. **Concurrency synchronization primitives — higher-level patterns.** The core
@@ -1262,16 +1334,19 @@ handlers (§8.7), extended with task scheduling state.
    concurrency runtime) may use C++ where it simplifies implementation. The
    language boundary is the generated code, not the runtime.
 
-### Resolved (continued)
+3. **Dictionary-based parameter model.** An emerging design direction where the
+   lambda parameter list (captures, arguments, and locals) forms a single
+   dictionary — the function's complete state. Recursive self-calls would carry
+   forward the full dictionary, updating only named entries. This would unify
+   recursion and state management into one mechanism and enable named arguments
+   as the norm. Needs careful design around: caller vs. self-call semantics,
+   capture initialization, and shadowing/scoping rules.
 
-10. **One language, two forms.** Compiled and interpreted execution share
-    identical syntax and semantics. There are no interpreter-only language
-    features. The interpreter is the compiler minus the C emission step — it
-    type-checks, monomorphizes, and executes in memory rather than emitting
-    code. This makes the interpreter a natural test oracle for the compiler:
-    same input must produce same output. If pressure to add dynamic features
-    (e.g., `eval`) materializes in the future, the effect system provides a
-    principled extension point without forking the language.
+4. **Named arguments.** If the parameter dictionary model is adopted, arguments
+   would naturally be passed by name rather than position. This has implications
+   for calling conventions, API evolution (adding/reordering params becomes
+   non-breaking), and the distinction between external calls (must provide all
+   typed args) and recursive self-calls (unspecified args carry forward).
 
 ---
 
@@ -1280,48 +1355,70 @@ handlers (§8.7), extended with task scheduling state.
 ```ebnf
 program        = form* ;
 
-form           = def-form | deftype-form | defconstraint-form
-               | defeffect-form | implement-form
+form           = let-form | set-form | implement-form
                | module-form | import-form | expression ;
 
-(* --- The unified `def` --- *)
+(* --- Bindings with `let` --- *)
 
-def-form       = '(' 'def' def-body ')' ;
+let-form       = '(' 'let' let-body ')' ;
 
-def-body       = func-def                          (* named function *)
-               | 'mut' binding expression           (* mutable binding *)
-               | binding expression                  (* immutable binding *)
-               | '(' binding+ ')' expression+        (* scoped let-block *)
-               | IDENT expression ;                  (* reassignment *)
+let-body       = binding expression                     (* immutable binding *)
+               | IDENT lambda-expr                      (* named function *)
+               | IDENT type-expr-form                   (* named type *)
+               | IDENT constraint-expr                  (* named constraint *)
+               | IDENT effect-expr                      (* named effect *)
+               | IDENT expression                       (* named value *)
+               | '(' binding+ ')' expression+ ;         (* scoped let-block *)
 
-func-def       = '(' ident param* ')' '->' type-expr effect-clause? expression+ ;
+set-form       = '(' 'set' IDENT expression ')' ;       (* reassignment *)
 
-effect-clause  = ':with' '(' IDENT+ ')' ;
+binding        = '[' IDENT ':' type-expr qualifier* ']'
+               | '[' IDENT ']' ;                         (* inferred type *)
 
-param          = '[' ident ':' type-expr label? ']' ;
+(* --- Lambda (functions and closures) --- *)
+
+lambda-expr    = '(' 'lambda' capture-clause? param* ')' '->' type-expr
+                 effect-clause? expression+ ;
+
+capture-clause = ':capture' capture+ ;
+capture        = '[' IDENT qualifier* ']' ;              (* no type = capture *)
+
+param          = '[' IDENT ':' type-expr label? ']' ;
 
 label          = 'as' IDENT ;
 
-binding        = '[' IDENT ':' type-expr ']'
-               | '[' IDENT ']' ;                     (* inferred type *)
+effect-clause  = ':with' '(' IDENT+ ')' ;
 
-(* --- Other definition forms --- *)
+(* --- Type definitions --- *)
 
-deftype-form   = '(' 'deftype' type-def ')' ;
-type-def       = IDENT ':opaque'? field* invariant? construct? viewers? methods? release? ;
+type-expr-form = '(' 'type' type-params? type-body ')' ;
+type-params    = '[' IDENT+ ']' ;                        (* generic type params *)
+type-body      = field* type-sections?                   (* struct type *)
+               | variant+ ;                              (* enum/tagged union *)
+
 field          = '[' IDENT ':' type-expr ']' ;
-invariant      = ':invariant' expression ;
-construct      = ':construct' def-form ;
-viewers        = ':viewers' '[' def-form+ ']' ;
-methods        = ':methods' '[' def-form+ ']' ;
-release        = ':release' def-form ;
+variant        = '(' IDENT field* ')' ;
 
-defconstraint-form = '(' 'defconstraint' IDENT method-sig+ ')' ;
+type-sections  = opaque? invariant? satisfies? construct? viewers? methods? release? ;
+opaque         = ':opaque' ;
+invariant      = ':invariant' expression ;
+satisfies      = ':satisfies' '(' IDENT+ ')' ;
+construct      = ':construct' let-form ;
+viewers        = ':viewers' '[' let-form+ ']' ;
+methods        = ':methods' '[' let-form+ ']' ;
+release        = ':release' lambda-expr ;
+
+(* --- Constraints and effects --- *)
+
+constraint-expr = '(' 'constraint' method-sig+ ')'
+                | '(' 'constraint' '(' '&' IDENT+ ')' ')' ;
 method-sig     = '(' IDENT param* ')' '->' type-expr ;
 
-defeffect-form = '(' 'defeffect' IDENT method-sig+ ')' ;
+effect-expr    = '(' 'effect' method-sig+ ')' ;
 
-implement-form = '(' 'implement' IDENT 'for' IDENT def-form+ ')' ;
+implement-form = '(' 'implement' IDENT 'for' IDENT let-form+ ')' ;
+
+(* --- Module system --- *)
 
 module-form    = '(' 'module' dotted-ident module-opts ')' ;
 import-form    = '(' 'import' dotted-ident import-opts ')' ;
@@ -1361,8 +1458,8 @@ literal        = INTEGER (':' type-expr)?        (* optional type suffix *)
 
 application    = '(' expression expression* ')' ;
 
-special-form   = def-form | if-form | match-form | cond-form
-               | lambda-form | handle-form | begin-form ;
+special-form   = let-form | set-form | if-form | match-form | cond-form
+               | lambda-expr | handle-form | begin-form ;
 
 if-form        = '(' 'if' expression expression expression ')' ;
 
@@ -1375,8 +1472,6 @@ pattern        = IDENT | literal | '_'
 cond-form      = '(' 'cond' cond-clause+ ')' ;
 cond-clause    = '[' expression expression ']'
                | '[' 'else' expression ']' ;
-
-lambda-form    = '(' 'lambda' '(' param* ')' '->' type-expr expression+ ')' ;
 
 handle-form    = '(' 'handle' IDENT 'in' expression+ ':on' handler-clause+ ')' ;
 handler-clause = '[' '(' IDENT IDENT* ')' expression ']' ;
@@ -1399,77 +1494,77 @@ begin-form     = '(' 'begin' expression+ ')' ;
 
 ;; --- Constraints ---
 
-(defconstraint printable
-  (to-string [self : Self]) -> string)
+(let printable (constraint
+  (to-string [self : Self]) -> string))
 
 ;; --- Effects ---
 
-(defeffect log
-  (log-msg [level : string] [msg : string]) -> unit)
+(let log (effect
+  (log-msg [level : string] [msg : string]) -> unit))
 
 ;; --- Types (opaque, with RAII) ---
 
-(deftype rgb
+(let rgb (type
   :opaque
   [r : int8 unsigned]
   [g : int8 unsigned]
   [b : int8 unsigned]
 
   :construct
-  (def (rgb-new [r : int8 unsigned]
-                   [g : int8 unsigned]
-                   [b : int8 unsigned]) -> rgb
+  (let rgb-new (lambda [r : int8 unsigned]
+                       [g : int8 unsigned]
+                       [b : int8 unsigned]) -> rgb
     (rgb r g b))
 
   :viewers
-  [(def (r [self : rgb]) -> int8 unsigned (.r self))
-   (def (g [self : rgb]) -> int8 unsigned (.g self))
-   (def (b [self : rgb]) -> int8 unsigned (.b self))])
+  [(let r (lambda [self : rgb]) -> int8 unsigned (.r self)))
+   (let g (lambda [self : rgb]) -> int8 unsigned (.g self)))
+   (let b (lambda [self : rgb]) -> int8 unsigned (.b self)))]))
 
 (implement printable for rgb
-  (def (to-string [self : rgb]) -> string
-    (format "rgb({}, {}, {})" (r self) (g self) (b self))))
+  (let to-string (lambda [self : rgb]) -> string
+    (format "rgb({}, {}, {})" (r self) (g self) (b self)))))
 
 ;; A resource type demonstrating RAII
-(deftype temp-file
+(let temp-file (type
   :opaque
   [path : string]
 
   :construct
-  (def (temp-file-create [prefix : string]) -> temp-file
+  (let temp-file-create (lambda [prefix : string]) -> temp-file
     :with (fail io)
-    (def [p : string] (io.make-temp-path prefix))
+    (let [p : string] (io.make-temp-path prefix))
     (io.write-file p "")
-    (temp-file p))
+    (temp-file p)))
 
   :viewers
-  [(def (path [self : temp-file]) -> string (.path self))]
+  [(let path (lambda [self : temp-file]) -> string (.path self)))]
 
   :methods
-  [(def (write [self : temp-file] [data : string]) -> unit
+  [(let write (lambda [self : temp-file] [data : string]) -> unit
      :with (fail io)
      (match (io.write-file (.path self) data)
        [(ok _)  unit]
        [(err e) (raise (format "write failed: {}" e))]))]
 
   :release
-  (def (release [self : temp-file]) -> unit
+  (lambda [self : temp-file]) -> unit
     :with (io)
-    (io.delete-file (.path self))))    ; cleanup runs automatically at scope exit
+    (io.delete-file (.path self)))))    ; cleanup runs automatically at scope exit
 
 ;; --- Generic function with constraints + effects ---
 
-(def (print-clamped [val : (& number printable) as T]
-                       [lo  : T]
-                       [hi  : T]) -> unit
+(let print-clamped (lambda [val : (& number printable) as T]
+                           [lo  : T]
+                           [hi  : T]) -> unit
   :with (io log)
-  (def [result : T] (clamp val lo hi))
+  (let [result : T] (clamp val lo hi))
   (log-msg "debug" (format "clamped to {}" (to-string result)))
-  (io.println (to-string result)))
+  (io.println (to-string result))))
 
 ;; --- Main ---
 
-(def (main) -> int32
+(let main (lambda) -> int32
   :with (io)
 
   ;; Handle the log effect — choose what logging means here
@@ -1477,46 +1572,46 @@ begin-form     = '(' 'begin' expression+ ')' ;
 
     (begin
       ;; Concrete, fully typed
-      (def [x : int32] 42)
-      (def [y : int32 unsigned] 255)
+      (let [x : int32] 42)
+      (let [y : int32 unsigned] 255)
 
       ;; Default literal types: int64, float64
-      (def [big : int64] 1000000)       ; int64 by default
-      (def [pi  : float64] 3.14159)     ; float64 by default
-      (def [small : int8] 42:int8)      ; explicit narrowing
+      (let [big : int64] 1000000)       ; int64 by default
+      (let [pi  : float64] 3.14159)     ; float64 by default
+      (let [small : int8] 42:int8)      ; explicit narrowing
 
       ;; Immutable by default — this would be a compile error:
-      ;; (def x 43)
+      ;; (set x 43)  ; ERROR: x is not mutable
 
       ;; Mutable — explicit opt-in
-      (def mut [counter : int64] 0)
-      (def counter (+ counter 1))
+      (let [counter : int64 mut] 0)
+      (set counter (+ counter 1))
 
       ;; Generic dispatch
       (print-clamped x 0:int32 100:int32)
       (print-clamped 3.14 0.0 1.0)
 
       ;; RAII in action — temp-file is cleaned up at scope exit
-      (def [tmp : temp-file] (temp-file-create "work"))
+      (let [tmp : temp-file] (temp-file-create "work"))
       (write tmp "intermediate results")
       ;; tmp.release called automatically here
 
       ;; Contiguous array — performance path
-      (def mut [samples : (array float64)] (array-new))
+      (let [samples : (array float64) mut] (array-new))
       (array-push! samples 1.0)
       (array-push! samples 2.5)
       (array-push! samples 3.7)
       (array-for-each
-        (lambda ([i : int64] [v : float64]) -> unit
+        (lambda [i : int64] [v : float64]) -> unit
           (io.println (format "sample[{}] = {}" i v)))
         samples)
 
       ;; Invariant-wrapped type — port-number checks at construction
-      (def [port : port-number] (port-number 8080))  ; ok
-      ;; (def [bad : port-number] (port-number 99999)) ; compile-time error
+      (let [port : port-number] (port-number 8080))  ; ok
+      ;; (let [bad : port-number] (port-number 99999)) ; compile-time error
 
       ;; Pattern matching on option
-      (def [result : (option int32)] (some 42))
+      (let [result : (option int32)] (some 42))
       (match result
         [(some n) (io.println (format "got: {}" n))]
         [(none)   (io.println "nothing")]))
@@ -1525,5 +1620,5 @@ begin-form     = '(' 'begin' expression+ ')' ;
     [(log-msg level msg)
       (io.eprintln (format "[{}] {}" level msg))]))
 
-  0)
+  0))
 ```

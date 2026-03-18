@@ -31,6 +31,10 @@ features. The interpreter is the compiler minus the C emission step.
 ## Key Features
 
 - **S-expression syntax** — serialized AST, no parsing ambiguity
+- **Declaration separate from definition** — `let` binds names; lambdas, types,
+  constraints, and effects describe what they are
+- **Unified function/closure model** — functions are lambdas bound with `let`;
+  closures use explicit `:capture` declarations
 - **Explicit concrete types** — `int32`, `float64` (not `int`, `float`)
 - **Constraint-based generics** — `int`, `float`, `number` are constraints for
   generic programming, not types

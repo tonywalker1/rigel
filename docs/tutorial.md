@@ -25,15 +25,15 @@ precedence. `(* 3 (+ 1 2))` is unambiguous — add first, then multiply.
 
 ## 2. Bindings: Naming Things
 
-Use `def` with square brackets to create a named value:
+Use `let` with square brackets to create a named value:
 
 ```scheme
-(def [x : int32] 42)
-(def [name : string] "hello")
-(def [pi : float64] 3.14159)
+(let [x : int32] 42)
+(let [name : string] "hello")
+(let [pi : float64] 3.14159)
 ```
 
-The pattern is: `(def [name : type] value)`.
+The pattern is: `(let [name : type] value)`.
 
 Every binding is **immutable by default**. Once you set `x` to 42, it stays 42.
 This isn't a limitation — it's the point. Most values in most programs never
@@ -59,54 +59,55 @@ There is no bare `int` type. If you want a 32-bit integer, you say `int32`.
 If you don't annotate a number, Rigel picks a sensible default:
 
 ```scheme
-(def [x] 42)       ; type inferred as int64 (the default for integer literals)
-(def [y] 3.14)     ; type inferred as float64 (the default for float literals)
+(let [x] 42)       ; type inferred as int64 (the default for integer literals)
+(let [y] 3.14)     ; type inferred as float64 (the default for float literals)
 ```
 
 You can narrow with a suffix:
 
 ```scheme
-(def [small : int8] 42:int8)
-(def [precise : float32] 3.14:float32)
+(let [small : int8] 42:int8)
+(let [precise : float32] 3.14:float32)
 ```
 
 ---
 
 ## 3. Mutable Bindings
 
-When you genuinely need a value that changes, say so explicitly with `mut`:
+When you genuinely need a value that changes, say so explicitly with `mut`
+inside the binding brackets:
 
 ```scheme
-(def mut [counter : int64] 0)
+(let [counter : int64 mut] 0)
 ```
 
-Now you can reassign it — note the syntax for reassignment drops the brackets:
+Now you can reassign it using `set`:
 
 ```scheme
-(def counter (+ counter 1))    ; counter is now 1
-(def counter (+ counter 1))    ; counter is now 2
+(set counter (+ counter 1))    ; counter is now 1
+(set counter (+ counter 1))    ; counter is now 2
 ```
 
 If you try to reassign an immutable binding, the compiler stops you:
 
 ```scheme
-(def [x : int32] 42)
-(def x 43)                     ; COMPILE ERROR: x is immutable
+(let [x : int32] 42)
+(set x 43)                     ; COMPILE ERROR: x is immutable
 ```
 
 ---
 
 ## 4. Functions
 
-Functions are also defined with `def`. The parentheses around the function name
-and parameters tell the parser "this is a function, not a variable":
+Functions are lambdas bound to a name with `let`. The `lambda` keyword
+introduces the function value:
 
 ```scheme
-(def (add [a : int32] [b : int32]) -> int32
+(let add (lambda [a : int32] [b : int32]) -> int32
   (+ a b))
 ```
 
-Read it as: *define a function called `add` that takes two `int32` parameters
+Read it as: *bind `add` to a lambda that takes two `int32` parameters
 and returns an `int32`.*
 
 Call it like any other operation:
@@ -121,29 +122,48 @@ The last expression in a function body is the return value. You can have
 multiple expressions — useful for sequential operations:
 
 ```scheme
-(def (greet [name : string]) -> string
-  (def [greeting : string] (str-concat "Hello, " name))
-  (str-concat greeting "!"))
+(let greet (lambda [name : string]) -> string
+  (let [greeting : string] (str-concat "Hello, " name))
+  (str-concat greeting "!")))
 
 (greet "world")    ; => "Hello, world!"
 ```
 
 ### Anonymous Functions (Lambdas)
 
-When you need a function as a value (to pass to another function), use `lambda`:
+When you need a function as a value (to pass to another function), use `lambda`
+without binding it to a name:
 
 ```scheme
-(lambda ([x : int32]) -> int32 (* x x))
+(lambda [x : int32]) -> int32 (* x x))
 ```
 
 This creates a function that squares its input. Lambdas are values — you can
 pass them around:
 
 ```scheme
-(map (lambda ([x : int32]) -> int32 (* x x))
+(map (lambda [x : int32]) -> int32 (* x x))
      '(1 2 3 4))
 ; => (1 4 9 16)
 ```
+
+### Closures and Captures
+
+A lambda can capture bindings from its environment, but it must declare them
+explicitly using `:capture`:
+
+```scheme
+(let [total : int64 mut] 0)
+(let accumulate (lambda :capture [total mut] [value : int64]) -> int64
+  (set total (+ total value))
+  total))
+
+(accumulate 10)    ; => 10
+(accumulate 20)    ; => 30
+```
+
+Captures without a type annotation close over an existing binding. The `mut`
+qualifier allows mutation of the captured state.
 
 ---
 
@@ -201,19 +221,19 @@ original is untouched.
 
 ```scheme
 ;; List — linked list
-(def [xs : (list int32)] '(1 2 3 4))
-(def [ys : (list int32)] (cons 0 xs))    ; ys is (0 1 2 3 4), xs unchanged
+(let [xs : (list int32)] '(1 2 3 4))
+(let [ys : (list int32)] (cons 0 xs))    ; ys is (0 1 2 3 4), xs unchanged
 
 ;; Vec — indexed collection (like an array you can't mutate)
-(def [v : (vec int32)] [1 2 3 4])
-(def [w : (vec int32)] (assoc v 2 99))   ; w is [1 2 99 4], v unchanged
+(let [v : (vec int32)] [1 2 3 4])
+(let [w : (vec int32)] (assoc v 2 99))   ; w is [1 2 99 4], v unchanged
 
 ;; Map — key-value pairs
-(def [m : (map string int32)] {"alice" 1 "bob" 2})
-(def [n : (map string int32)] (assoc m "carol" 3))
+(let [m : (map string int32)] {"alice" 1 "bob" 2})
+(let [n : (map string int32)] (assoc m "carol" 3))
 
 ;; Set — unique values
-(def [s : (set int32)] #{1 2 3})
+(let [s : (set int32)] #{1 2 3})
 ```
 
 Notice: types of collections are written `(list int32)`, `(map string int32)`,
@@ -225,11 +245,11 @@ No `for` loops. Instead, use `map`, `filter`, and `fold`:
 
 ```scheme
 ;; Double every element
-(map (lambda ([x : int32]) -> int32 (* x 2)) '(1 2 3))
+(map (lambda [x : int32]) -> int32 (* x 2)) '(1 2 3))
 ; => (2 4 6)
 
 ;; Keep only positives
-(filter (lambda ([x : int32]) -> bool (> x 0)) '(-1 2 -3 4))
+(filter (lambda [x : int32]) -> bool (> x 0)) '(-1 2 -3 4))
 ; => (2 4)
 
 ;; Sum a list
@@ -245,11 +265,11 @@ different syntax.
 When you need raw performance (tight loops, cache-friendly memory), use `array`:
 
 ```scheme
-(def mut [buf : (array float64)] (array-new))
+(let [buf : (array float64) mut] (array-new))
 (array-push! buf 1.0)
 (array-push! buf 2.5)
 (array-push! buf 3.7)
-(def [val : float64] (array-get buf 0))    ; 1.0 — bounds-checked
+(let [val : float64] (array-get buf 0))    ; 1.0 — bounds-checked
 ```
 
 The `!` suffix on `array-push!` is a convention (not enforced by the language)
@@ -267,12 +287,12 @@ compiler turns tail recursion into loops automatically, so there's no
 performance penalty:
 
 ```scheme
-(def (factorial [n : int64]) -> int64
-  (def (go [acc : int64] [i : int64]) -> int64
+(let factorial (lambda [n : int64]) -> int64
+  (let go (lambda [acc : int64] [i : int64]) -> int64
     (if (<= i 1)
       acc
       (go (* acc i) (- i 1))))
-  (go 1 n))
+  (go 1 n)))
 ```
 
 `go` calls itself as the very last thing it does (tail position), so the
@@ -290,10 +310,10 @@ Rigel's defaults are always the safe choice. You opt into danger explicitly
 using **qualifiers**:
 
 ```scheme
-(def [x : int32] 42)                          ; signed, checked (safe)
-(def [y : int32 unsigned] 255)                 ; unsigned, still checked
-(def [z : int32 unchecked] 42)                 ; signed, wraps on overflow
-(def [w : int32 unsigned unchecked] 255)       ; unsigned, wrapping — "C-style"
+(let [x : int32] 42)                          ; signed, checked (safe)
+(let [y : int32 unsigned] 255)                 ; unsigned, still checked
+(let [z : int32 unchecked] 42)                 ; signed, wraps on overflow
+(let [w : int32 unsigned unchecked] 255)       ; unsigned, wrapping — "C-style"
 ```
 
 **Checked** means overflow traps at runtime (or compile time if detectable).
@@ -312,26 +332,26 @@ This pattern — safe default, explicit opt-in — repeats throughout the langua
 
 ### Structs
 
-Use `deftype` to define a new type. Types are **opaque by default** — code
-outside the type can't peek at the fields:
+Use `type` inside a `let` binding to define a new type. Types are **opaque by
+default** — code outside the type can't peek at the fields:
 
 ```scheme
-(deftype point2d
+(let point2d (type
   [x : float64]
   [y : float64]
 
   :construct
-  (def (point [x : float64] [y : float64]) -> point2d
+  (let point (lambda [x : float64] [y : float64]) -> point2d
     (point2d x y))
 
   :viewers
-  [(def (x [self : point2d]) -> float64 (.x self))
-   (def (y [self : point2d]) -> float64 (.y self))]
+  [(let x (lambda [self : point2d]) -> float64 (.x self)))
+   (let y (lambda [self : point2d]) -> float64 (.y self)))]
 
   :methods
-  [(def (distance [self : point2d] [other : point2d]) -> float64
+  [(let distance (lambda [self : point2d] [other : point2d]) -> float64
      (sqrt (+ (pow (- (.x other) (.x self)) 2.0)
-              (pow (- (.y other) (.y self)) 2.0))))])
+              (pow (- (.y other) (.y self)) 2.0))))]))
 ```
 
 Let's unpack this:
@@ -346,8 +366,8 @@ Let's unpack this:
 Usage:
 
 ```scheme
-(def [p1 : point2d] (point 1.0 2.0))
-(def [p2 : point2d] (point 4.0 6.0))
+(let [p1 : point2d] (point 1.0 2.0))
+(let [p2 : point2d] (point 4.0 6.0))
 (x p1)              ; => 1.0
 (distance p1 p2)    ; => 5.0
 ```
@@ -355,15 +375,15 @@ Usage:
 ### Enums (Tagged Unions)
 
 ```scheme
-(deftype (option T)
+(let option (type [T]
   (some [value : T])
-  (none))
+  (none)))
 ```
 
 Use `match` to branch on variants:
 
 ```scheme
-(def [result : (option int32)] (some 42))
+(let [result : (option int32)] (some 42))
 
 (match result
   [(some n) (+ n 1)]    ; => 43
@@ -376,9 +396,9 @@ Rigel has no type aliases. If you want to name a type, you must wrap it — and
 the language nudges you toward adding an invariant that justifies the name:
 
 ```scheme
-(deftype port-number
+(let port-number (type
   [value : int16 unsigned]
-  :invariant (and (>= value 0) (<= value 65535)))
+  :invariant (and (>= value 0) (<= value 65535))))
 ```
 
 Now `(port-number 80)` succeeds, but `(port-number 70000)` is a compile-time
@@ -387,8 +407,8 @@ compiler auto-generates the constructor and a viewer — you don't need to write
 them yourself.
 
 ```scheme
-(def [http : port-number] (port-number 80))       ; ok
-(def [bad  : port-number] (port-number 70000))     ; compile-time error
+(let [http : port-number] (port-number 80))       ; ok
+(let [bad  : port-number] (port-number 70000))     ; compile-time error
 ```
 
 ---
@@ -401,11 +421,11 @@ rather than specific types.
 
 ```scheme
 ;; This is CONCRETE — only works with int32
-(def (add-i32 [a : int32] [b : int32]) -> int32
+(let add-i32 (lambda [a : int32] [b : int32]) -> int32
   (+ a b))
 
 ;; This is GENERIC — works with any signed checked integer
-(def (add [a : int] [b : int]) -> int
+(let add (lambda [a : int] [b : int]) -> int
   (+ a b))
 ```
 
@@ -428,7 +448,7 @@ Sometimes you need to say "these two parameters must be the *same* type." Use
 `as` to capture the resolved type:
 
 ```scheme
-(def (add [a : int as T] [b : T]) -> T
+(let add (lambda [a : int as T] [b : T]) -> T
   (+ a b))
 ```
 
@@ -440,8 +460,8 @@ error — `T` was bound to `int32` by the first argument.
 Combine constraints with `&`:
 
 ```scheme
-(def (lookup [k : (& hashable eq)] [m : (map k any)]) -> (option any)
-  ...)
+(let lookup (lambda [k : (& hashable eq)] [m : (map k any)]) -> (option any)
+  ...))
 ```
 
 `k` must satisfy both `hashable` and `eq`.
@@ -457,13 +477,13 @@ In Rigel, you can. Every side effect is **declared** in the function signature:
 
 ```scheme
 ;; Pure function — no effects
-(def (add [a : int64] [b : int64]) -> int64
+(let add (lambda [a : int64] [b : int64]) -> int64
   (+ a b))
 
 ;; This function may fail and do I/O
-(def (read-config [path : string]) -> config
+(let read-config (lambda [path : string]) -> config
   :with (fail io)
-  ...)
+  ...))
 ```
 
 The `:with (fail io)` clause says: this function may raise errors (`fail`) and
@@ -475,13 +495,13 @@ the compiler.
 Inside an effectful function, you use the effect's operations:
 
 ```scheme
-(def (read-config [path : string]) -> config
+(let read-config (lambda [path : string]) -> config
   :with (fail io)
-  (def [content : string]
+  (let [content : string]
     (match (read-file path)                      ; read-file is an io operation
       [(ok s)   s]
       [(err e)  (raise (str-concat "cannot read: " path))]))  ; raise is a fail operation
-  (parse content))
+  (parse content)))
 ```
 
 ### Handling Effects
@@ -540,10 +560,10 @@ exports:
 (module math.vector
   :exports (vec2 dot cross magnitude))
 
-(deftype vec2 ...)
+(let vec2 (type ...))
 
-(def (dot [a : vec2] [b : vec2]) -> float64
-  ...)
+(let dot (lambda [a : vec2] [b : vec2]) -> float64
+  ...))
 ```
 
 Import from other modules:
@@ -562,32 +582,32 @@ Some types own resources — file handles, network connections, temporary files.
 Rigel cleans these up automatically when they go out of scope, using `:release`:
 
 ```scheme
-(deftype temp-file
+(let temp-file (type
   :opaque
   [path : string]
 
   :construct
-  (def (temp-file-create [prefix : string]) -> temp-file
+  (let temp-file-create (lambda [prefix : string]) -> temp-file
     :with (fail io)
-    (def [p : string] (io.make-temp-path prefix))
+    (let [p : string] (io.make-temp-path prefix))
     (io.write-file p "")
-    (temp-file p))
+    (temp-file p)))
 
   :release
-  (def (release [self : temp-file]) -> unit
+  (lambda [self : temp-file]) -> unit
     :with (io)
-    (io.delete-file (.path self))))
+    (io.delete-file (.path self)))))
 ```
 
 Usage:
 
 ```scheme
-(def (do-work) -> unit
+(let do-work (lambda) -> unit
   :with (fail io)
-  (def [tmp : temp-file] (temp-file-create "work"))
+  (let [tmp : temp-file] (temp-file-create "work"))
   (write tmp "data")
   ;; tmp is automatically cleaned up here — even if (write) raised an error
-  )
+  ))
 ```
 
 If you know C++ (RAII/destructors) or Rust (`Drop`) or Python (`with`
@@ -601,19 +621,19 @@ special syntax at the call site.
 Spawning concurrent work is an effect, like everything else:
 
 ```scheme
-(def (main [args : (vec string)]) -> int32
+(let main (lambda [args : (vec string)]) -> int32
   :with (io concurrent fail)
 
   (handle concurrent in
-    (def [users  : (task (list user))]  (spawn (fetch-users)))
-    (def [orders : (task (list order))] (spawn (fetch-orders)))
+    (let [users  : (task (list user))]  (spawn (fetch-users)))
+    (let [orders : (task (list order))] (spawn (fetch-orders)))
     (merge-results (await users) (await orders))
     :on
     [(spawn f)   (schedule-on-pool f)]
     [(await t)   (block-until-complete t)]
     [(await-all ts) (block-until-all-complete ts)])
 
-  0)
+  0))
 ```
 
 Key ideas:
@@ -623,14 +643,14 @@ Key ideas:
 - Tasks communicate through **channels**:
 
 ```scheme
-(def (producer [ch : (channel int32)]) -> unit
+(let producer (lambda [ch : (channel int32)]) -> unit
   :with (concurrent)
-  (channel-send ch 42))
+  (channel-send ch 42)))
 
-(def (consumer [ch : (channel int32)]) -> unit
+(let consumer (lambda [ch : (channel int32)]) -> unit
   :with (concurrent io)
-  (def [val] (channel-recv ch))
-  (io.println (format "got: {}" val)))
+  (let [val] (channel-recv ch))
+  (io.println (format "got: {}" val))))
 ```
 
 ### Pure Parallelism
@@ -639,10 +659,10 @@ If a function is pure (no `:with` clause), the compiler knows it's safe to
 run in parallel:
 
 ```scheme
-(def (expensive [x : int64]) -> int64
-  (fib x))
+(let expensive (lambda [x : int64]) -> int64
+  (fib x)))
 
-(def [results] (par-map data expensive))    ; safe — compiler verified purity
+(let results (par-map data expensive))    ; safe — compiler verified purity
 ```
 
 ---
@@ -657,52 +677,52 @@ Here's a small but complete program that uses most of what we've covered:
 (import io)
 
 ;; A type with an invariant
-(deftype percentage
+(let percentage (type
   [value : float64]
-  :invariant (and (>= value 0.0) (<= value 100.0)))
+  :invariant (and (>= value 0.0) (<= value 100.0))))
 
 ;; A type for exam scores
-(deftype exam-result
+(let exam-result (type
   :opaque
   [student : string]
   [score   : percentage]
 
   :construct
-  (def (exam-result-new [student : string] [score : float64]) -> exam-result
+  (let exam-result-new (lambda [student : string] [score : float64]) -> exam-result
     :with (fail)
-    (exam-result student (percentage score)))
+    (exam-result student (percentage score))))
 
   :viewers
-  [(def (student [self : exam-result]) -> string (.student self))
-   (def (score   [self : exam-result]) -> percentage (.score self))])
+  [(let student (lambda [self : exam-result]) -> string (.student self)))
+   (let score   (lambda [self : exam-result]) -> percentage (.score self)))]))
 
 ;; Pure function — works on any list of exam-result
-(def (average-score [results : (list exam-result)]) -> float64
-  (def [total : float64]
-    (fold (lambda ([acc : float64] [r : exam-result]) -> float64
+(let average-score (lambda [results : (list exam-result)]) -> float64
+  (let [total : float64]
+    (fold (lambda [acc : float64] [r : exam-result]) -> float64
             (+ acc (value (score r))))
           0.0
           results))
-  (/ total (int-to-float (length results))))
+  (/ total (int-to-float (length results)))))
 
 ;; Effectful — reads from I/O, may fail
-(def (load-results [path : string]) -> (list exam-result)
+(let load-results (lambda [path : string]) -> (list exam-result)
   :with (fail io)
-  (def [content : string]
+  (let [content : string]
     (match (read-file path)
       [(ok s)   s]
       [(err e)  (raise "cannot read results file")]))
-  (parse-exam-results content))
+  (parse-exam-results content)))
 
 ;; Entry point
-(def (main) -> int32
+(let main (lambda) -> int32
   :with (io)
   (handle fail in
     (handle io in
       (begin
-        (def [results : (list exam-result)]
+        (let [results : (list exam-result)]
           (load-results "scores.csv"))
-        (def [avg : float64] (average-score results))
+        (let [avg : float64] (average-score results))
         (io.println (format "Average: {}%" avg))
         0)
       :on
@@ -713,7 +733,7 @@ Here's a small but complete program that uses most of what we've covered:
     [(raise msg)
       (begin
         (io.eprintln (format "Error: {}" msg))
-        1)]))
+        1)])))
 ```
 
 ---
@@ -722,11 +742,12 @@ Here's a small but complete program that uses most of what we've covered:
 
 | Concept | Syntax |
 |---------|--------|
-| Immutable binding | `(def [x : int32] 42)` |
-| Mutable binding | `(def mut [x : int32] 0)` |
-| Reassignment | `(def x (+ x 1))` |
-| Function | `(def (name [a : T] [b : T]) -> T body)` |
-| Lambda | `(lambda ([x : T]) -> T body)` |
+| Immutable binding | `(let [x : int32] 42)` |
+| Mutable binding | `(let [x : int32 mut] 0)` |
+| Reassignment | `(set x (+ x 1))` |
+| Named function | `(let name (lambda [a : T] [b : T]) -> T body)` |
+| Anonymous lambda | `(lambda [x : T]) -> T body)` |
+| Closure w/ capture | `(lambda :capture [x mut] [a : T]) -> T body)` |
 | If | `(if cond then else)` |
 | Match | `(match val [pattern expr] ...)` |
 | Cond | `(cond [test expr] ... [else expr])` |
@@ -738,8 +759,8 @@ Here's a small but complete program that uses most of what we've covered:
 | Type label | `[a : int as T]` |
 | Effect declaration | `:with (fail io)` |
 | Effect handling | `(handle eff in body :on [clauses])` |
-| Opaque type | `(deftype name :opaque fields ...)` |
-| Invariant type | `(deftype name [v : T] :invariant expr)` |
+| Opaque type | `(let name (type :opaque fields ...))` |
+| Invariant type | `(let name (type [v : T] :invariant expr))` |
 | Module | `(module name :exports (syms))` |
 | Import | `(import mod :as alias)` |
 

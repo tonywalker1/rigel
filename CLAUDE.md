@@ -29,14 +29,19 @@ phase.
 
 Read `docs/rigel-spec.md` for full details. Brief summary of non-obvious choices:
 
-- **`def` is unified** — one keyword for immutable bindings, mutable bindings, reassignment, and
-  function definitions. Parser disambiguates structurally (no ambiguity in S-expressions).
+- **Declaration separate from definition** — `let` binds names to values. Naming is orthogonal
+  to what is being named (a value, a lambda, a type, a constraint, an effect). Reassignment
+  uses `set`. No unified `def` keyword.
+- **Unified function/closure model** — functions and lambdas are the same construct (`lambda`).
+  A "function" is a lambda with no captures, bound with `let`. Closures use `:capture` to
+  explicitly declare closed-over bindings. Self-capture enables recursion.
 - **`int`, `float`, `number` are constraints, not types** — concrete types are `int32`, `float64`,
   etc. Familiar short names only appear in generic type parameter positions.
 - **Qualifiers (`unsigned`, `unchecked`) are both modifiers and constraints** — safe defaults
   (signed, checked); opt into danger explicitly.
-- **No type aliases** — `deftype` with an invariant is the only way to name a type. Forces
-  semantic justification; compiler auto-generates constructor/viewer/release when not provided.
+- **No type aliases** — `(let name (type ...))` with an invariant is the only way to name a type.
+  Forces semantic justification; compiler auto-generates constructor/viewer/release when not
+  provided.
 - **Algebraic effects** — declared in function signature via `:with (fail io)`. No `:with` means
   pure; compiler enforces this. Same effectful code runs with real or mock handlers.
 - **Types are opaque by default** — `.field` access only inside the type's own methods.
@@ -48,6 +53,10 @@ Read `docs/rigel-spec.md` for full details. Brief summary of non-obvious choices
 
 ## Open Design Questions
 
+- Dictionary-based parameter model — lambda parameters (captures, args, locals) as a single
+  dictionary; recursive self-calls carry forward the full dictionary, updating only named entries
+- Named arguments — if the dictionary model is adopted, arguments are passed by name rather than
+  position
 - Higher-level concurrency patterns (select/alt, cancellation, back-pressure)
 - C++ in the runtime — generated code is C, but runtime may use C++ for
   persistent data structures, ref counting, effect handlers, concurrency
@@ -66,6 +75,7 @@ Read `docs/rigel-spec.md` for full details. Brief summary of non-obvious choices
 ## Possible Next Steps
 
 - Start implementing a parser or transpiler
+- Flesh out the dictionary-based parameter model and named arguments
 - Refine higher-level concurrency patterns (select/alt, cancellation, back-pressure)
 - Discuss recursion schemes (catamorphisms/anamorphisms from Meijer et al.)
 - Explore how the language interacts with AI-assisted coding workflows

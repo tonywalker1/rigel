@@ -5,9 +5,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What This Project Is
 
 Rigel is a **language design project** — a strongly-typed, immutable-by-default, Scheme-derived
-programming language with first-class constraint-based generics. It is designed around the thesis
-that code should be optimized for AI writing and human reading, with rigor and tooling as the
-primary differentiators.
+programming language with first-class constraint-based generics. Inspired by Scheme and Clojure.
+
+It is designed around a thesis about AI-assisted coding:
+
+1. Refactoring is much easier with AI
+2. Frameworks matter far less
+3. Languages matter less
+4. Code should be optimized for writing by AI and reading by humans
+5. Rigor, structure, and tooling are far more important than syntax sugar
 
 The current deliverable is a language specification (`docs/rigel-spec.md`) and eventually a
 compiler/transpiler that emits C. There is no build system yet; the project is in the design
@@ -16,8 +22,7 @@ phase.
 ## Source Files
 
 - `docs/rigel-spec.md` — The living language specification. Edit this as design decisions are made.
-- `docs/prompts/rigel-continuation-prompt.md` — Context prompt for resuming the design
-  conversation in a new session.
+- `docs/tutorial.md` — Tutorial for programmers learning Rigel.
 - Source files will use the `.rgl` extension when the language is implemented.
 
 ## Key Design Decisions (Settled)
@@ -38,12 +43,14 @@ Read `docs/rigel-spec.md` for full details. Brief summary of non-obvious choices
 - **RAII via `:release`** — runs at scope exit including effect-raise paths.
 - **Compilation target: C** — monomorphization for generics, tail recursion → loops,
   checked arithmetic via `__builtin_add_overflow`. Runtime library may use C++.
+- **One language, two forms** — compiled and interpreted share identical syntax and semantics.
+  The interpreter is the compiler minus the C emission step. No interpreter-only features.
 
 ## Open Design Questions
 
 - Higher-level concurrency patterns (select/alt, cancellation, back-pressure)
-- "One language, two forms" (compiled + interpreted with eval) theory — not yet
-  fully elaborated in the spec
+- C++ in the runtime — generated code is C, but runtime may use C++ for
+  persistent data structures, ref counting, effect handlers, concurrency
 
 ## Collaboration Notes
 
@@ -52,3 +59,13 @@ Read `docs/rigel-spec.md` for full details. Brief summary of non-obvious choices
   Rigel syntax, and push back when something is wrong
 - Reference PL theory when relevant (lambda calculus, catamorphisms/anamorphisms, type classes)
 - Connect design choices to C++, Scheme, Clojure, and Rust
+- Direct engagement with design tradeoffs — include practical compilation/implementation concerns
+- The collaboration is highly collaborative: the lead designer proposes core ideas, the assistant
+  fills in details (effects system, C compilation strategy, grammar, examples)
+
+## Possible Next Steps
+
+- Start implementing a parser or transpiler
+- Refine higher-level concurrency patterns (select/alt, cancellation, back-pressure)
+- Discuss recursion schemes (catamorphisms/anamorphisms from Meijer et al.)
+- Explore how the language interacts with AI-assisted coding workflows

@@ -1262,9 +1262,16 @@ handlers (§8.7), extended with task scheduling state.
    concurrency runtime) may use C++ where it simplifies implementation. The
    language boundary is the generated code, not the runtime.
 
-3. **"One language, two forms."** The theory that compiled and interpreted
-   (eval) execution should share the same syntax and semantics — only the
-   execution model differs. Not yet fully elaborated in the spec.
+### Resolved (continued)
+
+10. **One language, two forms.** Compiled and interpreted execution share
+    identical syntax and semantics. There are no interpreter-only language
+    features. The interpreter is the compiler minus the C emission step — it
+    type-checks, monomorphizes, and executes in memory rather than emitting
+    code. This makes the interpreter a natural test oracle for the compiler:
+    same input must produce same output. If pressure to add dynamic features
+    (e.g., `eval`) materializes in the future, the effect system provides a
+    principled extension point without forking the language.
 
 ---
 

@@ -1,5 +1,30 @@
-/trash/
+/scratch/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
 *.egg-info/
+*.egg
+dist/
+build/
+.venv/
+venv/
 .pytest_cache/
+
+# IDEs
+.vscode/
+.idea/
+*.kdev4
+.kdev4/
+*.creator
+*.creator.user
+*.cflags
+*.cxxflags
+*.config
+*.files
+*.includes
+
+# OS
+.DS_Store
+Thumbs.db

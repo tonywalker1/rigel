@@ -66,3 +66,12 @@ and Rust's traits. The effects system draws from algebraic effects research
 ## File Extension
 
 `.rgl`
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards.
+
+## License
+
+[MIT](LICENSE)

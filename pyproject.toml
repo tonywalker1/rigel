@@ -1,0 +1,18 @@
+[project]
+name = "rigel"
+version = "0.1.0"
+description = "Rigel language toolchain"
+requires-python = ">=3.12"
+
+[project.scripts]
+rigel = "rigel.driver:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

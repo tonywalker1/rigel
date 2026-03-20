@@ -33,8 +33,9 @@ Read `docs/rigel-spec.md` for full details. Brief summary of non-obvious choices
   to what is being named (a value, a lambda, a type, a constraint, an effect). Reassignment
   uses `set`. No unified `def` keyword.
 - **Unified function/closure model** — functions and lambdas are the same construct (`lambda`).
-  A "function" is a lambda with no captures, bound with `let`. Closures use `:capture` to
-  explicitly declare closed-over bindings. Self-capture enables recursion.
+  A "function" is a lambda with no captures, bound with `let`. Lambda syntax uses keyword
+  sections: `(:args ...)`, `(:capture ...)`, `(:returns T)`, `(:with (E))`. Closures use
+  `(:capture ...)` to explicitly declare closed-over bindings. Self-capture enables recursion.
 - **`int`, `float`, `number` are constraints, not types** — concrete types are `int32`, `float64`,
   etc. Familiar short names only appear in generic type parameter positions.
 - **Qualifiers (`unsigned`, `unchecked`) are both modifiers and constraints** — safe defaults
@@ -42,8 +43,8 @@ Read `docs/rigel-spec.md` for full details. Brief summary of non-obvious choices
 - **No type aliases** — `(let name (type ...))` with an invariant is the only way to name a type.
   Forces semantic justification; compiler auto-generates constructor/viewer/release when not
   provided.
-- **Algebraic effects** — declared in function signature via `:with (fail io)`. No `:with` means
-  pure; compiler enforces this. Same effectful code runs with real or mock handlers.
+- **Algebraic effects** — declared in lambda keyword section via `(:with (fail io))`. No `:with`
+  means pure; compiler enforces this. Same effectful code runs with real or mock handlers.
 - **Types are opaque by default** — `.field` access only inside the type's own methods.
 - **RAII via `:release`** — runs at scope exit including effect-raise paths.
 - **Compilation target: C** — monomorphization for generics, tail recursion → loops,

@@ -87,6 +87,10 @@ This two-pass approach keeps each pass simple and independently testable.
 | `(let add (lambda (:args (a int64) (b int64)) (:returns int64) (+ a b)))` | `LetForm(Symbol("add"), LambdaForm(...))` |
 | `(do (let x 1) (let y 2) (+ x y))` | `DoForm([LetForm(...), LetForm(...), CallForm(...)])` |
 
+**Note:** The spec target syntax uses bracket bindings `[a : int32]` in `:args`, but the parser
+currently accepts paren syntax `(a int64)` as an implementation shortcut. Bracket binding parsing
+is a follow-up task.
+
 ## Regeneration Instructions
 
 - Generate `src/rigel/parser.py`.

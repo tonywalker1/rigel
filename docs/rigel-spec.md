@@ -138,15 +138,15 @@ type parameters.
 
 ```scheme
 ;; CONCRETE: fully specified, allocates exactly 4 bytes
-(let add-saturating (lambda [a : int32] [b : int32]) -> int32
+(let add-saturating (lambda (:args [a : int32] [b : int32]) (:returns int32)
   (saturating-add a b))
 
 ;; GENERIC: int constraint — works for any signed checked integer
-(let add (lambda [a : int] [b : int]) -> int
+(let add (lambda (:args [a : int] [b : int]) (:returns int)
   (+ a b))
 
 ;; GENERIC: number constraint — works for any numeric type
-(let sum (lambda [xs : (list number)]) -> number
+(let sum (lambda (:args [xs : (list number)]) (:returns number)
   (fold + (cast 0 number) xs))
 ```
 
@@ -160,17 +160,17 @@ The syntax uses `as` to capture the resolved type:
 
 ```scheme
 ;; T is bound to whatever concrete type matches `int`
-(let add (lambda [a : int as T] [b : T]) -> T
+(let add (lambda (:args [a : int as T] [b : T]) (:returns T)
   (+ a b))
 
 ;; Multiple labels
-(let convert (lambda [src : int as S] [dst-type : (type-of float as D)]) -> D
+(let convert (lambda (:args [src : int as S] [dst-type : (type-of float as D)]) (:returns D)
   (cast src D))
 
 ;; Label with compound constraint
-(let hash-insert (lambda [k : (& hashable eq) as K]
-                         [v : any as V]
-                         [m : (map K V)]) -> (map K V)
+(let hash-insert (lambda (:args [k : (& hashable eq) as K]
+                                [v : any as V]
+                                [m : (map K V)]) (:returns (map K V))
   ...))
 ```
 
@@ -190,15 +190,15 @@ Interaction is through declared operations only (see §8b for full details).
   [y : float64]
 
   :construct
-  (let point (lambda [x : float64] [y : float64]) -> point2d
+  (let point (lambda (:args [x : float64] [y : float64]) (:returns point2d)
     (point2d x y))
 
   :viewers
-  [(let x (lambda [self : point2d]) -> float64 (.x self))
-   (let y (lambda [self : point2d]) -> float64 (.y self))]
+  [(let x (lambda (:args [self : point2d]) (:returns float64) (.x self))
+   (let y (lambda (:args [self : point2d]) (:returns float64) (.y self))]
 
   :methods
-  [(let distance (lambda [self : point2d] [other : point2d]) -> float64
+  [(let distance (lambda (:args [self : point2d] [other : point2d]) (:returns float64)
      (sqrt (+ (pow (- (.x other) (.x self)) 2.0)
               (pow (- (.y other) (.y self)) 2.0))))]))
 
@@ -214,16 +214,16 @@ Interaction is through declared operations only (see §8b for full details).
   :satisfies (number)
 
   :construct
-  (let from-int (lambda [n : int32]) -> fixed-point-32
+  (let from-int (lambda (:args [n : int32]) (:returns fixed-point-32)
     (fixed-point-32 (* n 256)))    ; 8-bit fractional part
 
   :viewers
-  [(let to-float (lambda [self : fixed-point-32]) -> float64
+  [(let to-float (lambda (:args [self : fixed-point-32]) (:returns float64)
      (/ (int-to-float (.raw self)) 256.0))]
 
   :methods
-  [(let add (lambda [self : fixed-point-32] [other : fixed-point-32])
-       -> fixed-point-32
+  [(let add (lambda (:args [self : fixed-point-32] [other : fixed-point-32])
+       (:returns fixed-point-32)
      (fixed-point-32 (+ (.raw self) (.raw other))))]))
 ```
 
@@ -237,9 +237,9 @@ Users can also define new **constraints** (analogous to type classes/traits):
 
 ;; Declare that a type satisfies it
 (implement serializable for point2d
-  (let serialize (lambda [self : point2d]) -> (list int8 unsigned)
+  (let serialize (lambda (:args [self : point2d]) (:returns (list int8 unsigned))
     ...))
-  (let deserialize (lambda [data : (list int8 unsigned)]) -> point2d
+  (let deserialize (lambda (:args [data : (list int8 unsigned)]) (:returns point2d)
     ...)))
 ```
 
@@ -250,8 +250,8 @@ constraint can:
 
 ```scheme
 ;; K must satisfy both hashable and eq
-(let lookup (lambda [k : (& hashable eq) as K]
-                    [m : (map K any)]) -> (option any)
+(let lookup (lambda (:args [k : (& hashable eq) as K]
+                          [m : (map K any)]) (:returns (option any))
   ...))
 
 ;; Named compound constraint
@@ -296,7 +296,7 @@ S-expressions):
 | `(let [name : type] expr)` | Immutable binding |
 | `(let [name : type mut] expr)` | Mutable binding |
 | `(set name expr)` | Reassign existing mutable (compile error if immutable) |
-| `(let name (lambda params...) -> type body...)` | Named function |
+| `(let name (lambda (:args params...) (:returns type) body...)` | Named function |
 | `(let ([bindings...]) body...)` | Scoped let-block |
 
 ### 3.2 Functions and Closures
@@ -307,19 +307,19 @@ lambda that captures bindings from its environment.
 
 ```scheme
 ;; Named function (a lambda bound to a name)
-(let add (lambda [a : int32] [b : int32]) -> int32
+(let add (lambda (:args [a : int32] [b : int32]) (:returns int32)
   (+ a b))
 
 ;; Generic function with constraint
-(let add (lambda [a : number as T] [b : T]) -> T
+(let add (lambda (:args [a : number as T] [b : T]) (:returns T)
   (+ a b))
 
 ;; Anonymous lambda
-(lambda [x : int32]) -> int32
+(lambda (:args [x : int32]) (:returns int32)
   (* x x))
 
 ;; Higher-order function
-(let apply-twice (lambda [f : (-> T T)] [x : any as T]) -> T
+(let apply-twice (lambda (:args [f : (-> T T)] [x : any as T]) (:returns T)
   (f (f x)))
 ```
 
@@ -331,12 +331,12 @@ signature:
 
 ```scheme
 ;; No captures — a pure function
-(let add (lambda [a : int32] [b : int32]) -> int32
+(let add (lambda (:args [a : int32] [b : int32]) (:returns int32)
   (+ a b))
 
 ;; Explicit capture — closes over `total`
 (let [total : int64 mut] 0)
-(let accumulate (lambda :capture [total mut] [value : int64]) -> int64
+(let accumulate (lambda (:capture [total mut]) (:args [value : int64]) (:returns int64)
   (set total (+ total value))
   total))
 ```
@@ -357,7 +357,7 @@ recursive lambda captures its own binding:
 
 ```scheme
 ;; Self-referencing closure (recursive lambda)
-(let factorial (lambda :capture [factorial] [n : int64]) -> int64
+(let factorial (lambda (:capture [factorial]) (:args [n : int64]) (:returns int64)
   (if (<= n 1)
     1
     (* n (factorial (- n 1))))))
@@ -402,20 +402,20 @@ mechanism. Standard higher-order functions for collection processing:
 
 ```scheme
 ;; Map, filter, fold — the workhorses
-(map (lambda [x : int32]) -> int32 (* x 2)) my-list)
-(filter (lambda [x : int32]) -> bool (> x 0)) my-list)
+(map (lambda (:args [x : int32]) (:returns int32) (* x 2)) my-list)
+(filter (lambda (:args [x : int32]) (:returns bool) (> x 0)) my-list)
 (fold + 0 my-list)
 
 ;; Explicit recursion (tail-call optimized)
-(let factorial (lambda [n : int64]) -> int64
-  (let go (lambda [acc : int64] [i : int64]) -> int64
+(let factorial (lambda (:args [n : int64]) (:returns int64)
+  (let go (lambda (:args [acc : int64] [i : int64]) (:returns int64)
     (if (<= i 1)
       acc
       (go (* acc i) (- i 1))))
   (go 1 n)))
 
 ;; For-each with side effects (returns unit)
-(for-each (lambda [x : int32]) -> unit (print x)) my-list)
+(for-each (lambda (:args [x : int32]) (:returns unit) (print x)) my-list)
 ```
 
 ### 3.5 Data Structures
@@ -469,7 +469,7 @@ arrays. The runtime implementation may use C++ (e.g., bounds-checked
 
 ;; Iterate contiguous memory (cache-friendly)
 (array-for-each
-  (lambda [i : int64] [val : int8 unsigned]) -> unit
+  (lambda (:args [i : int64] [val : int8 unsigned]) (:returns unit)
     (process val))
   buf)
 ```
@@ -573,14 +573,14 @@ not user-provided, so the wrapping cost is minimal:
   [y : float64]
 
   :construct
-  (let vec2-new (lambda [x : float64] [y : float64]) -> vec2
+  (let vec2-new (lambda (:args [x : float64] [y : float64]) (:returns vec2)
     (vec2 x y))
 
   :viewers
-  [(let x (lambda [self : vec2]) -> float64 (.x self))
-   (let y (lambda [self : vec2]) -> float64 (.y self))]))
+  [(let x (lambda (:args [self : vec2]) (:returns float64) (.x self))
+   (let y (lambda (:args [self : vec2]) (:returns float64) (.y self))]))
 
-(let dot (lambda [a : vec2] [b : vec2]) -> float64
+(let dot (lambda (:args [a : vec2] [b : vec2]) (:returns float64)
   (+ (* (x a) (x b))
      (* (y a) (y b)))))
 ```
@@ -592,7 +592,7 @@ not user-provided, so the wrapping cost is minimal:
 (import math.vector :only (dot cross))
 (import io)
 
-(let main (lambda) -> int32
+(let main (lambda (:returns int32)
   (let [a : vec.vec2] (vec.vec2-new 1.0 2.0))
   (let [b : vec.vec2] (vec.vec2-new 3.0 4.0))
   (io.println (dot a b))
@@ -802,8 +802,7 @@ Functions declare which effects they may perform using `with`:
 
 ```scheme
 ;; This function may fail and do I/O
-(let read-config (lambda [path : string]) -> config
-  :with (fail io)
+(let read-config (lambda (:args [path : string]) (:returns config) (:with (fail io))
   (let [content : string]
     (match (read-file path)
       [(ok s)   s]
@@ -821,11 +820,11 @@ clause is **pure** — the type system guarantees it.
 
 ```scheme
 ;; Pure function — no effects, compiler enforces this
-(let add (lambda [a : int64] [b : int64]) -> int64
+(let add (lambda (:args [a : int64] [b : int64]) (:returns int64)
   (+ a b))
 
 ;; This would be a compile error — println performs io:
-;; (let sneaky (lambda [x : int64]) -> int64
+;; (let sneaky (lambda (:args [x : int64]) (:returns int64)
 ;;   (io.println "side effect!")   ; ERROR: performs `io` but not declared
 ;;   x))
 ```
@@ -868,11 +867,9 @@ wrapped in handlers one at a time, peeling off layers:
 
 ```scheme
 ;; A pipeline that reads files, may fail, and yields intermediate results
-(let process-files (lambda [paths : (list string)]) -> unit
-  :with (fail io yield)
+(let process-files (lambda (:args [paths : (list string)]) (:returns unit) (:with (fail io yield))
   (for-each
-    (lambda [p : string]) -> unit
-      :with (fail io yield)
+    (lambda (:args [p : string]) (:returns unit) (:with (fail io yield))
       (let [content : string]
         (match (read-file p)
           [(ok s)   s]
@@ -957,8 +954,7 @@ mechanism. A handler can convert between them:
 
 ```scheme
 ;; Convert effectful code to a result value
-(let try-read-config (lambda [path : string]) -> (result config string)
-  :with (io)
+(let try-read-config (lambda (:args [path : string]) (:returns (result config string)) (:with (io))
   (handle fail in
     (ok (read-config path))
     :on [(raise msg) (err msg)])))
@@ -981,23 +977,20 @@ defined operations:
   [state  : (ref connection-state)]
 
   :construct
-  (let connect (lambda [host : string] [port : int16 unsigned]) -> connection
-    :with (fail io)
+  (let connect (lambda (:args [host : string] [port : int16 unsigned]) (:returns connection) (:with (fail io))
     (let [h : int64] (tcp-connect host port))
     (connection h (ref (connected)))))
 
   :methods
-  [(let send (lambda [self : connection] [data : bytes]) -> (result int64 io-error)
-     :with (io)
+  [(let send (lambda (:args [self : connection] [data : bytes]) (:returns (result int64 io-error)) (:with (io))
      ...))
-   (let is-connected (lambda [self : connection]) -> bool
+   (let is-connected (lambda (:args [self : connection]) (:returns bool)
      (match (deref (.state self))    ; .field access only inside methods
        [(connected) true]
        [_           false])))]
 
   :release
-  (lambda [self : connection]) -> unit
-    :with (io)
+  (lambda (:args [self : connection]) (:returns unit) (:with (io))
     (tcp-close (.handle self)))))
 ```
 
@@ -1012,8 +1005,7 @@ The `:release` block defines cleanup that runs automatically when a value
 goes out of scope, analogous to C++ destructors and Rust's `Drop`:
 
 ```scheme
-(let do-work (lambda [host : string]) -> unit
-  :with (fail io)
+(let do-work (lambda (:args [host : string]) (:returns unit) (:with (fail io))
   (let [conn : connection] (connect host 8080))
   ;; use conn...
   (send conn b"hello")
@@ -1049,23 +1041,20 @@ There is **no inheritance** in Rigel. Code reuse is through:
   [buffer : (mut-vec int8 unsigned)]
 
   :construct
-  (let buffered-connect (lambda [host : string] [port : int16 unsigned])
-      -> buffered-connection
-    :with (fail io)
+  (let buffered-connect (lambda (:args [host : string] [port : int16 unsigned])
+      (:returns buffered-connection) (:with (fail io))
     (buffered-connection (connect host port) (mut-vec-new))))
 
   :methods
-  [(let send (lambda [self : buffered-connection] [data : bytes])
-       -> (result int64 io-error)
-     :with (io)
+  [(let send (lambda (:args [self : buffered-connection] [data : bytes])
+       (:returns (result int64 io-error)) (:with (io))
      ;; buffer, then flush
      (push-all! (.buffer self) data)
      (when (> (length (.buffer self)) 4096)
        (flush self))
      (ok (byte-length data))))
 
-   (let flush (lambda [self : buffered-connection]) -> (result unit io-error)
-     :with (io)
+   (let flush (lambda (:args [self : buffered-connection]) (:returns (result unit io-error)) (:with (io))
      (let [result : (result int64 io-error)]
        (send (.inner self) (freeze (.buffer self))))
      (clear! (.buffer self))
@@ -1074,8 +1063,7 @@ There is **no inheritance** in Rigel. Code reuse is through:
        [(err e) (err e)])))]
 
   :release
-  (lambda [self : buffered-connection]) -> unit
-    :with (io)
+  (lambda (:args [self : buffered-connection]) (:returns unit) (:with (io))
     ;; flush remaining, then inner connection cleans up automatically
     (ignore (flush self)))))
     ;; (.inner self) release is called automatically (nested RAII)
@@ -1095,16 +1083,16 @@ copies or computed values:
   [quality   : int8 unsigned]
 
   :construct
-  (let reading (lambda [ts : int64 unsigned] [val : float64] [q : int8 unsigned])
-      -> sensor-reading
+  (let reading (lambda (:args [ts : int64 unsigned] [val : float64] [q : int8 unsigned])
+      (:returns sensor-reading)
     (sensor-reading ts val q)))
 
   :viewers                           ; read-only projections
-  [(let timestamp (lambda [self : sensor-reading]) -> int64 unsigned
+  [(let timestamp (lambda (:args [self : sensor-reading]) (:returns int64 unsigned)
      (.timestamp self)))
-   (let value (lambda [self : sensor-reading]) -> float64
+   (let value (lambda (:args [self : sensor-reading]) (:returns float64)
      (.value self)))
-   (let is-valid (lambda [self : sensor-reading]) -> bool
+   (let is-valid (lambda (:args [self : sensor-reading]) (:returns bool)
      (> (.quality self) 50)))]))       ; computed, not raw field
 ```
 
@@ -1161,8 +1149,7 @@ A thread is a closure plus a path of execution. `main` is no different — it is
 simply the task that receives the root `concurrent` handler from the runtime:
 
 ```scheme
-(let main (lambda [args : (vec string)]) -> int32
-  :with (io concurrent fail)
+(let main (lambda (:args [args : (vec string)]) (:returns int32) (:with (io concurrent fail))
   (let server (spawn (listen config)))
   (let worker (spawn (process-queue queue)))
   (await-all (list server worker))
@@ -1179,14 +1166,12 @@ Channels are the primary coordination primitive. The existing ownership system
 enforces safety with no additional rules:
 
 ```scheme
-(let producer (lambda [ch : (channel int32)]) -> unit
-  :with (concurrent io)
+(let producer (lambda (:args [ch : (channel int32)]) (:returns unit) (:with (concurrent io))
   (loop [i 0]
     (channel-send ch i)
     (recur (+ i 1)))))
 
-(let consumer (lambda [ch : (channel int32)]) -> unit
-  :with (concurrent io)
+(let consumer (lambda (:args [ch : (channel int32)]) (:returns unit) (:with (concurrent io))
   (loop []
     (let val (channel-recv ch))
     (log "got: {val}")
@@ -1210,7 +1195,7 @@ observe side effects. This enables safe automatic parallelism:
 
 ```scheme
 ;; pure — no :with
-(let expensive (lambda [x : int64]) -> int64
+(let expensive (lambda (:args [x : int64]) (:returns int64)
   (fib x))
 
 ;; explicit parallel map — compiler verifies purity of argument function
@@ -1377,17 +1362,17 @@ binding        = '[' IDENT ':' type-expr qualifier* ']'
 
 (* --- Lambda (functions and closures) --- *)
 
-lambda-expr    = '(' 'lambda' capture-clause? param* ')' '->' type-expr
-                 effect-clause? expression+ ;
+lambda-expr    = '(' 'lambda' lambda-section* expression+ ')' ;
+lambda-section = ':args' param+
+               | ':capture' capture+
+               | ':returns' type-expr
+               | ':with' '(' IDENT+ ')' ;
 
-capture-clause = ':capture' capture+ ;
 capture        = '[' IDENT qualifier* ']' ;              (* no type = capture *)
 
 param          = '[' IDENT ':' type-expr label? ']' ;
 
 label          = 'as' IDENT ;
-
-effect-clause  = ':with' '(' IDENT+ ')' ;
 
 (* --- Type definitions --- *)
 
@@ -1459,7 +1444,7 @@ literal        = INTEGER (':' type-expr)?        (* optional type suffix *)
 application    = '(' expression expression* ')' ;
 
 special-form   = let-form | set-form | if-form | match-form | cond-form
-               | lambda-expr | handle-form | begin-form ;
+               | lambda-expr | handle-form | do-form ;
 
 if-form        = '(' 'if' expression expression expression ')' ;
 
@@ -1476,7 +1461,7 @@ cond-clause    = '[' expression expression ']'
 handle-form    = '(' 'handle' IDENT 'in' expression+ ':on' handler-clause+ ')' ;
 handler-clause = '[' '(' IDENT IDENT* ')' expression ']' ;
 
-begin-form     = '(' 'begin' expression+ ')' ;
+do-form        = '(' 'do' expression+ ')' ;
 ```
 
 ---
@@ -1511,18 +1496,18 @@ begin-form     = '(' 'begin' expression+ ')' ;
   [b : int8 unsigned]
 
   :construct
-  (let rgb-new (lambda [r : int8 unsigned]
-                       [g : int8 unsigned]
-                       [b : int8 unsigned]) -> rgb
+  (let rgb-new (lambda (:args [r : int8 unsigned]
+                              [g : int8 unsigned]
+                              [b : int8 unsigned]) (:returns rgb)
     (rgb r g b))
 
   :viewers
-  [(let r (lambda [self : rgb]) -> int8 unsigned (.r self)))
-   (let g (lambda [self : rgb]) -> int8 unsigned (.g self)))
-   (let b (lambda [self : rgb]) -> int8 unsigned (.b self)))]))
+  [(let r (lambda (:args [self : rgb]) (:returns int8 unsigned) (.r self)))
+   (let g (lambda (:args [self : rgb]) (:returns int8 unsigned) (.g self)))
+   (let b (lambda (:args [self : rgb]) (:returns int8 unsigned) (.b self)))]))
 
 (implement printable for rgb
-  (let to-string (lambda [self : rgb]) -> string
+  (let to-string (lambda (:args [self : rgb]) (:returns string)
     (format "rgb({}, {}, {})" (r self) (g self) (b self)))))
 
 ;; A resource type demonstrating RAII
@@ -1531,46 +1516,41 @@ begin-form     = '(' 'begin' expression+ ')' ;
   [path : string]
 
   :construct
-  (let temp-file-create (lambda [prefix : string]) -> temp-file
-    :with (fail io)
+  (let temp-file-create (lambda (:args [prefix : string]) (:returns temp-file) (:with (fail io))
     (let [p : string] (io.make-temp-path prefix))
     (io.write-file p "")
     (temp-file p)))
 
   :viewers
-  [(let path (lambda [self : temp-file]) -> string (.path self)))]
+  [(let path (lambda (:args [self : temp-file]) (:returns string) (.path self)))]
 
   :methods
-  [(let write (lambda [self : temp-file] [data : string]) -> unit
-     :with (fail io)
+  [(let write (lambda (:args [self : temp-file] [data : string]) (:returns unit) (:with (fail io))
      (match (io.write-file (.path self) data)
        [(ok _)  unit]
        [(err e) (raise (format "write failed: {}" e))]))]
 
   :release
-  (lambda [self : temp-file]) -> unit
-    :with (io)
+  (lambda (:args [self : temp-file]) (:returns unit) (:with (io))
     (io.delete-file (.path self)))))    ; cleanup runs automatically at scope exit
 
 ;; --- Generic function with constraints + effects ---
 
-(let print-clamped (lambda [val : (& number printable) as T]
-                           [lo  : T]
-                           [hi  : T]) -> unit
-  :with (io log)
+(let print-clamped (lambda (:args [val : (& number printable) as T]
+                                  [lo  : T]
+                                  [hi  : T]) (:returns unit) (:with (io log))
   (let [result : T] (clamp val lo hi))
   (log-msg "debug" (format "clamped to {}" (to-string result)))
   (io.println (to-string result))))
 
 ;; --- Main ---
 
-(let main (lambda) -> int32
-  :with (io)
+(let main (lambda (:returns int32) (:with (io))
 
   ;; Handle the log effect — choose what logging means here
   (handle log in
 
-    (begin
+    (do
       ;; Concrete, fully typed
       (let [x : int32] 42)
       (let [y : int32 unsigned] 255)
@@ -1602,7 +1582,7 @@ begin-form     = '(' 'begin' expression+ ')' ;
       (array-push! samples 2.5)
       (array-push! samples 3.7)
       (array-for-each
-        (lambda [i : int64] [v : float64]) -> unit
+        (lambda (:args [i : int64] [v : float64]) (:returns unit)
           (io.println (format "sample[{}] = {}" i v)))
         samples)
 

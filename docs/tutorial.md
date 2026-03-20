@@ -103,7 +103,7 @@ Functions are lambdas bound to a name with `let`. The `lambda` keyword
 introduces the function value:
 
 ```scheme
-(let add (lambda [a : int32] [b : int32]) -> int32
+(let add (lambda (:args [a : int32] [b : int32]) (:returns int32)
   (+ a b))
 ```
 
@@ -122,7 +122,7 @@ The last expression in a function body is the return value. You can have
 multiple expressions — useful for sequential operations:
 
 ```scheme
-(let greet (lambda [name : string]) -> string
+(let greet (lambda (:args [name : string]) (:returns string)
   (let [greeting : string] (str-concat "Hello, " name))
   (str-concat greeting "!")))
 
@@ -135,14 +135,14 @@ When you need a function as a value (to pass to another function), use `lambda`
 without binding it to a name:
 
 ```scheme
-(lambda [x : int32]) -> int32 (* x x))
+(lambda (:args [x : int32]) (:returns int32) (* x x))
 ```
 
 This creates a function that squares its input. Lambdas are values — you can
 pass them around:
 
 ```scheme
-(map (lambda [x : int32]) -> int32 (* x x))
+(map (lambda (:args [x : int32]) (:returns int32) (* x x))
      '(1 2 3 4))
 ; => (1 4 9 16)
 ```
@@ -154,7 +154,7 @@ explicitly using `:capture`:
 
 ```scheme
 (let [total : int64 mut] 0)
-(let accumulate (lambda :capture [total mut] [value : int64]) -> int64
+(let accumulate (lambda (:capture [total mut]) (:args [value : int64]) (:returns int64)
   (set total (+ total value))
   total))
 
@@ -245,11 +245,11 @@ No `for` loops. Instead, use `map`, `filter`, and `fold`:
 
 ```scheme
 ;; Double every element
-(map (lambda [x : int32]) -> int32 (* x 2)) '(1 2 3))
+(map (lambda (:args [x : int32]) (:returns int32) (* x 2)) '(1 2 3))
 ; => (2 4 6)
 
 ;; Keep only positives
-(filter (lambda [x : int32]) -> bool (> x 0)) '(-1 2 -3 4))
+(filter (lambda (:args [x : int32]) (:returns bool) (> x 0)) '(-1 2 -3 4))
 ; => (2 4)
 
 ;; Sum a list
@@ -287,8 +287,8 @@ compiler turns tail recursion into loops automatically, so there's no
 performance penalty:
 
 ```scheme
-(let factorial (lambda [n : int64]) -> int64
-  (let go (lambda [acc : int64] [i : int64]) -> int64
+(let factorial (lambda (:args [n : int64]) (:returns int64)
+  (let go (lambda (:args [acc : int64] [i : int64]) (:returns int64)
     (if (<= i 1)
       acc
       (go (* acc i) (- i 1))))
@@ -341,15 +341,15 @@ default** — code outside the type can't peek at the fields:
   [y : float64]
 
   :construct
-  (let point (lambda [x : float64] [y : float64]) -> point2d
+  (let point (lambda (:args [x : float64] [y : float64]) (:returns point2d)
     (point2d x y))
 
   :viewers
-  [(let x (lambda [self : point2d]) -> float64 (.x self)))
-   (let y (lambda [self : point2d]) -> float64 (.y self)))]
+  [(let x (lambda (:args [self : point2d]) (:returns float64) (.x self)))
+   (let y (lambda (:args [self : point2d]) (:returns float64) (.y self)))]
 
   :methods
-  [(let distance (lambda [self : point2d] [other : point2d]) -> float64
+  [(let distance (lambda (:args [self : point2d] [other : point2d]) (:returns float64)
      (sqrt (+ (pow (- (.x other) (.x self)) 2.0)
               (pow (- (.y other) (.y self)) 2.0))))]))
 ```
@@ -421,11 +421,11 @@ rather than specific types.
 
 ```scheme
 ;; This is CONCRETE — only works with int32
-(let add-i32 (lambda [a : int32] [b : int32]) -> int32
+(let add-i32 (lambda (:args [a : int32] [b : int32]) (:returns int32)
   (+ a b))
 
 ;; This is GENERIC — works with any signed checked integer
-(let add (lambda [a : int] [b : int]) -> int
+(let add (lambda (:args [a : int] [b : int]) (:returns int)
   (+ a b))
 ```
 
@@ -448,7 +448,7 @@ Sometimes you need to say "these two parameters must be the *same* type." Use
 `as` to capture the resolved type:
 
 ```scheme
-(let add (lambda [a : int as T] [b : T]) -> T
+(let add (lambda (:args [a : int as T] [b : T]) (:returns T)
   (+ a b))
 ```
 
@@ -460,7 +460,7 @@ error — `T` was bound to `int32` by the first argument.
 Combine constraints with `&`:
 
 ```scheme
-(let lookup (lambda [k : (& hashable eq)] [m : (map k any)]) -> (option any)
+(let lookup (lambda (:args [k : (& hashable eq)] [m : (map k any)]) (:returns (option any))
   ...))
 ```
 
@@ -477,12 +477,11 @@ In Rigel, you can. Every side effect is **declared** in the function signature:
 
 ```scheme
 ;; Pure function — no effects
-(let add (lambda [a : int64] [b : int64]) -> int64
+(let add (lambda (:args [a : int64] [b : int64]) (:returns int64)
   (+ a b))
 
 ;; This function may fail and do I/O
-(let read-config (lambda [path : string]) -> config
-  :with (fail io)
+(let read-config (lambda (:args [path : string]) (:returns config) (:with (fail io))
   ...))
 ```
 
@@ -495,8 +494,7 @@ the compiler.
 Inside an effectful function, you use the effect's operations:
 
 ```scheme
-(let read-config (lambda [path : string]) -> config
-  :with (fail io)
+(let read-config (lambda (:args [path : string]) (:returns config) (:with (fail io))
   (let [content : string]
     (match (read-file path)                      ; read-file is an io operation
       [(ok s)   s]
@@ -562,7 +560,7 @@ exports:
 
 (let vec2 (type ...))
 
-(let dot (lambda [a : vec2] [b : vec2]) -> float64
+(let dot (lambda (:args [a : vec2] [b : vec2]) (:returns float64)
   ...))
 ```
 
@@ -587,23 +585,20 @@ Rigel cleans these up automatically when they go out of scope, using `:release`:
   [path : string]
 
   :construct
-  (let temp-file-create (lambda [prefix : string]) -> temp-file
-    :with (fail io)
+  (let temp-file-create (lambda (:args [prefix : string]) (:returns temp-file) (:with (fail io))
     (let [p : string] (io.make-temp-path prefix))
     (io.write-file p "")
     (temp-file p)))
 
   :release
-  (lambda [self : temp-file]) -> unit
-    :with (io)
+  (lambda (:args [self : temp-file]) (:returns unit) (:with (io))
     (io.delete-file (.path self)))))
 ```
 
 Usage:
 
 ```scheme
-(let do-work (lambda) -> unit
-  :with (fail io)
+(let do-work (lambda (:returns unit) (:with (fail io))
   (let [tmp : temp-file] (temp-file-create "work"))
   (write tmp "data")
   ;; tmp is automatically cleaned up here — even if (write) raised an error
@@ -621,8 +616,7 @@ special syntax at the call site.
 Spawning concurrent work is an effect, like everything else:
 
 ```scheme
-(let main (lambda [args : (vec string)]) -> int32
-  :with (io concurrent fail)
+(let main (lambda (:args [args : (vec string)]) (:returns int32) (:with (io concurrent fail))
 
   (handle concurrent in
     (let [users  : (task (list user))]  (spawn (fetch-users)))
@@ -643,12 +637,10 @@ Key ideas:
 - Tasks communicate through **channels**:
 
 ```scheme
-(let producer (lambda [ch : (channel int32)]) -> unit
-  :with (concurrent)
+(let producer (lambda (:args [ch : (channel int32)]) (:returns unit) (:with (concurrent))
   (channel-send ch 42)))
 
-(let consumer (lambda [ch : (channel int32)]) -> unit
-  :with (concurrent io)
+(let consumer (lambda (:args [ch : (channel int32)]) (:returns unit) (:with (concurrent io))
   (let [val] (channel-recv ch))
   (io.println (format "got: {}" val))))
 ```
@@ -659,7 +651,7 @@ If a function is pure (no `:with` clause), the compiler knows it's safe to
 run in parallel:
 
 ```scheme
-(let expensive (lambda [x : int64]) -> int64
+(let expensive (lambda (:args [x : int64]) (:returns int64)
   (fib x)))
 
 (let results (par-map data expensive))    ; safe — compiler verified purity
@@ -688,26 +680,24 @@ Here's a small but complete program that uses most of what we've covered:
   [score   : percentage]
 
   :construct
-  (let exam-result-new (lambda [student : string] [score : float64]) -> exam-result
-    :with (fail)
+  (let exam-result-new (lambda (:args [student : string] [score : float64]) (:returns exam-result) (:with (fail))
     (exam-result student (percentage score))))
 
   :viewers
-  [(let student (lambda [self : exam-result]) -> string (.student self)))
-   (let score   (lambda [self : exam-result]) -> percentage (.score self)))]))
+  [(let student (lambda (:args [self : exam-result]) (:returns string) (.student self)))
+   (let score   (lambda (:args [self : exam-result]) (:returns percentage) (.score self)))]))
 
 ;; Pure function — works on any list of exam-result
-(let average-score (lambda [results : (list exam-result)]) -> float64
+(let average-score (lambda (:args [results : (list exam-result)]) (:returns float64)
   (let [total : float64]
-    (fold (lambda [acc : float64] [r : exam-result]) -> float64
+    (fold (lambda (:args [acc : float64] [r : exam-result]) (:returns float64)
             (+ acc (value (score r))))
           0.0
           results))
   (/ total (int-to-float (length results)))))
 
 ;; Effectful — reads from I/O, may fail
-(let load-results (lambda [path : string]) -> (list exam-result)
-  :with (fail io)
+(let load-results (lambda (:args [path : string]) (:returns (list exam-result)) (:with (fail io))
   (let [content : string]
     (match (read-file path)
       [(ok s)   s]
@@ -715,11 +705,10 @@ Here's a small but complete program that uses most of what we've covered:
   (parse-exam-results content)))
 
 ;; Entry point
-(let main (lambda) -> int32
-  :with (io)
+(let main (lambda (:returns int32) (:with (io))
   (handle fail in
     (handle io in
-      (begin
+      (do
         (let [results : (list exam-result)]
           (load-results "scores.csv"))
         (let [avg : float64] (average-score results))
@@ -731,7 +720,7 @@ Here's a small but complete program that uses most of what we've covered:
       [(println msg)    (os.stdout.write-line msg)])
     :on
     [(raise msg)
-      (begin
+      (do
         (io.eprintln (format "Error: {}" msg))
         1)])))
 ```
@@ -745,9 +734,9 @@ Here's a small but complete program that uses most of what we've covered:
 | Immutable binding | `(let [x : int32] 42)` |
 | Mutable binding | `(let [x : int32 mut] 0)` |
 | Reassignment | `(set x (+ x 1))` |
-| Named function | `(let name (lambda [a : T] [b : T]) -> T body)` |
-| Anonymous lambda | `(lambda [x : T]) -> T body)` |
-| Closure w/ capture | `(lambda :capture [x mut] [a : T]) -> T body)` |
+| Named function | `(let name (lambda (:args [a : T] [b : T]) (:returns T) body)` |
+| Anonymous lambda | `(lambda (:args [x : T]) (:returns T) body)` |
+| Closure w/ capture | `(lambda (:capture [x mut]) (:args [a : T]) (:returns T) body)` |
 | If | `(if cond then else)` |
 | Match | `(match val [pattern expr] ...)` |
 | Cond | `(cond [test expr] ... [else expr])` |

@@ -66,9 +66,41 @@ def _run_pipeline(args: argparse.Namespace) -> int:
     return 0
 
 
-def _compile_stub(args: argparse.Namespace) -> int:
-    print("error: compile not yet implemented", file=sys.stderr)
-    return 1
+def _compile(args: argparse.Namespace) -> int:
+    """Parse → check → emit C → write .c file."""
+    from rigel.parser import parse
+    from rigel.check import check
+    from rigel.emit_c import emit_c
+    import pathlib
+
+    src_path = pathlib.Path(args.file)
+    out_path = src_path.with_suffix(".c")
+
+    try:
+        source = src_path.read_text()
+    except FileNotFoundError:
+        print(f"error: file not found: {args.file}", file=sys.stderr)
+        return 1
+    except OSError as e:
+        print(f"error: cannot read: {args.file}: {e}", file=sys.stderr)
+        return 1
+
+    try:
+        ast = parse(source, str(src_path))
+    except Exception as e:
+        print(e, file=sys.stderr)
+        return 1
+
+    try:
+        ir = check(ast)
+    except Exception as e:
+        print(e, file=sys.stderr)
+        return 1
+
+    c_source = emit_c(ir)
+    out_path.write_text(c_source)
+    print(f"wrote {out_path}")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -91,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
     check_parser.add_argument("--dump-ir", action="store_true", help="Print checked IR to stderr")
 
     # compile
-    compile_parser = subparsers.add_parser("compile", help="Compile a Rigel program to C (not yet implemented)")
+    compile_parser = subparsers.add_parser("compile", help="Compile a Rigel program to C")
     compile_parser.add_argument("file", help="Rigel source file")
 
     args = parser.parse_args(argv)
@@ -101,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.command == "compile":
-        return _compile_stub(args)
+        return _compile(args)
 
     return _run_pipeline(args)
 

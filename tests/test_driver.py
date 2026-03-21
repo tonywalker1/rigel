@@ -57,11 +57,22 @@ class TestCheckSubcommand:
 
 
 class TestCompileSubcommand:
-    def test_compile_stub(self, tmp_path, capsys):
+    def test_compile_emits_c(self, tmp_path, capsys):
         f = tmp_path / "test.rgl"
         f.write_text("42")
-        assert main(["compile", str(f)]) == 1
-        assert "not yet implemented" in capsys.readouterr().err
+        assert main(["compile", str(f)]) == 0
+        assert "test.c" in capsys.readouterr().out
+        assert (tmp_path / "test.c").exists()
+
+    def test_compile_output_contains_main(self, tmp_path):
+        f = tmp_path / "test.rgl"
+        f.write_text("42")
+        main(["compile", str(f)])
+        assert "int main(void)" in (tmp_path / "test.c").read_text()
+
+    def test_compile_file_not_found(self, tmp_path, capsys):
+        assert main(["compile", "nonexistent.rgl"]) == 1
+        assert "file not found" in capsys.readouterr().err
 
 
 class TestFlags:

@@ -21,12 +21,13 @@ opt-in to danger.
 
 ## Status
 
-**Design phase.** The language specification is largely complete. No compiler
-exists yet.
+**Early implementation.** The language specification is largely complete. The
+interpreter (parse → type-check → evaluate) is working. The C compiler backend
+is not yet implemented.
 
-One language, two execution forms: compiled (transpiles to C) and interpreted
-(REPL/eval). Both share identical syntax and semantics — no interpreter-only
-features. The interpreter is the compiler minus the C emission step.
+One language, two execution forms: compiled (transpiles to C) and interpreted.
+Both share identical syntax and semantics — no interpreter-only features. The
+interpreter is the compiler minus the C emission step.
 
 ## Key Features
 
@@ -49,6 +50,33 @@ features. The interpreter is the compiler minus the C emission step.
   outlive their handler scope
 - **Compilation target: C** — monomorphization, tail recursion to loops,
   runtime may use C++
+
+## Getting Started
+
+Requires Python 3.12+.
+
+```bash
+# Install the toolchain
+git clone https://github.com/tonywalker1/rigel.git
+cd rigel
+pip install -e .
+
+# Interpret a Rigel program
+rigel run hello.rgl
+
+# Type-check without running
+rigel check hello.rgl
+
+# Compile to C (not yet implemented)
+rigel compile hello.rgl
+```
+
+A minimal Rigel program:
+
+```scheme
+(let main (lambda ()
+    (print "hello, world")))
+```
 
 ## Documentation
 

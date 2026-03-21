@@ -1,0 +1,17 @@
+; recursion.rgl — recursive function using self-capture.
+;
+; The lambda captures itself via (:capture (gcd)) to enable recursion.
+; Tail calls will be compiled to loops in the C backend.
+(let gcd (lambda (:args (a int64) (b int64)) (:returns int64)
+    (:capture (gcd))
+    (if (= b 0) a (gcd b (mod a b)))))
+
+(let classify-gcd (lambda (:args (a int64) (b int64)) (:returns string)
+    (:capture (gcd))
+    (if (= (gcd a b) 1) "coprime" "not coprime")))
+
+(handle
+    (do
+        (println (classify-gcd 48 18))
+        (println (classify-gcd 17 13)))
+    (io (msg) msg))

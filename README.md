@@ -74,8 +74,9 @@ rigel compile hello.rgl
 A minimal Rigel program:
 
 ```scheme
-(let main (lambda ()
-    (print "hello, world")))
+(handle
+    (do (println "hello, world"))
+    (io (msg) msg))
 ```
 
 ## Documentation

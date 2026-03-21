@@ -1,0 +1,7 @@
+; hello_world.rgl — minimal Rigel program demonstrating the io effect.
+;
+; print and println raise the io effect. The handle block intercepts it,
+; forwarding each message to the runtime output stream.
+(handle
+    (do (println "hello, world"))
+    (io (msg) msg))

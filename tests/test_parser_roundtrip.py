@@ -44,11 +44,11 @@ def pp(node: Node) -> str:
         case LambdaForm(params=params, captures=caps, return_type=ret, effects=effs, body=body):
             parts = ["lambda"]
             if params:
-                args_str = " ".join(f"({pp(p.name)} {pp(p.type_ann)}{' ' + pp(p.default) if p.default else ''})"
+                args_str = " ".join(f"[{pp(p.name)} : {pp(p.type_ann)}{' ' + pp(p.default) if p.default else ''}]"
                                     for p in params)
                 parts.append(f"(:args {args_str})")
             if caps:
-                caps_str = " ".join(f"({pp(c.name)}{' :mut' if c.mut else ''})" for c in caps)
+                caps_str = " ".join(f"[{pp(c.name)}{' mut' if c.mut else ''}]" for c in caps)
                 parts.append(f"(:capture {caps_str})")
             if ret:
                 parts.append(f"(:returns {pp(ret)})")
@@ -298,18 +298,18 @@ class TestRoundtripForms:
         assert_roundtrip("(set x 43)")
 
     def test_lambda_minimal(self):
-        assert_roundtrip("(lambda (:args (x int64)) x)")
+        assert_roundtrip("(lambda (:args [x : int64]) x)")
 
     def test_lambda_full(self):
         assert_roundtrip(
-            "(lambda (:args (x int64) (y int64)) (:capture (z)) (:returns int64) (:with (io)) (+ x y))"
+            "(lambda (:args [x : int64] [y : int64]) (:capture [z]) (:returns int64) (:with (io)) (+ x y))"
         )
 
     def test_lambda_mutable_capture(self):
-        assert_roundtrip("(lambda (:args (x int64)) (:capture (z :mut)) x)")
+        assert_roundtrip("(lambda (:args [x : int64]) (:capture [z mut]) x)")
 
     def test_lambda_default_param(self):
-        assert_roundtrip("(lambda (:args (x int64 42)) x)")
+        assert_roundtrip("(lambda (:args [x : int64 42]) x)")
 
     def test_type_minimal(self):
         assert_roundtrip("(type (:fields (x int64)))")
@@ -345,7 +345,7 @@ class TestRoundtripForms:
         assert_roundtrip("(f (g x) (h y))")
 
     def test_module(self):
-        assert_roundtrip("(module math (:export add) (let add (lambda (:args (a int64)) a)))")
+        assert_roundtrip("(module math (:export add) (let add (lambda (:args [a : int64]) a)))")
 
     def test_import_basic(self):
         assert_roundtrip("(import math)")
@@ -367,7 +367,7 @@ class TestRoundtripComposition:
     """Nested and composed expressions survive roundtrip."""
 
     def test_let_binding_lambda(self):
-        assert_roundtrip("(let inc (lambda (:args (x int64)) (:returns int64) (+ x 1)))")
+        assert_roundtrip("(let inc (lambda (:args [x : int64]) (:returns int64) (+ x 1)))")
 
     def test_nested_if(self):
         assert_roundtrip("(if true (if false 1 2) 3)")

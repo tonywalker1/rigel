@@ -1,9 +1,6 @@
-; safe_div.rgl — effect-driven error handling.
-;
-; safe-div raises the fail effect on division by zero. The caller
-; decides how to handle it via a handle block — returning a sentinel
-; value (-1) instead of crashing.
-(let safe-div (lambda (:args (a int64) (b int64)) (:returns int64) (:with (fail))
+; Demonstrates the fail algebraic effect for safe integer division.
+
+(let safe-div (lambda (:args [a : int64] [b : int64]) (:returns int64) (:with (fail))
     (if (= b 0)
         (raise fail "division by zero")
         (/ a b))))

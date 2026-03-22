@@ -172,19 +172,19 @@ class TestDo:
 
 class TestLambda:
     def test_simple_function(self):
-        src = "(let add (lambda (:args (a int64) (b int64)) (:returns int64) (+ a b))) (add 3 4)"
+        src = "(let add (lambda (:args [a : int64] [b : int64]) (:returns int64) (+ a b))) (add 3 4)"
         assert run(src) == 7
 
     def test_no_return_type(self):
         # Lambda with no :returns defaults to unit
         out = StringIO()
-        src = '(let greet (lambda (:args (s string)) (:with (io)) (println s)))'
+        src = '(let greet (lambda (:args [s : string]) (:with (io)) (println s)))'
         # Just defining it, not calling — returns None (unit from let)
         assert run(src, output=out) is None
 
     def test_closure(self):
         src = """(let x 10)
-(let add-x (lambda (:args (y int64)) (:capture (x)) (:returns int64) (+ x y)))
+(let add-x (lambda (:args [y : int64]) (:capture [x]) (:returns int64) (+ x y)))
 (add-x 5)"""
         assert run(src) == 15
 
@@ -196,19 +196,19 @@ class TestLambda:
 
 class TestRecursion:
     def test_factorial(self):
-        src = """(let fact (lambda (:args (n int64)) (:returns int64)
+        src = """(let fact (lambda (:args [n : int64]) (:returns int64)
   (if (= n 0) 1 (* n (fact (- n 1))))))
 (fact 5)"""
         assert run(src) == 120
 
     def test_fibonacci(self):
-        src = """(let fib (lambda (:args (n int64)) (:returns int64)
+        src = """(let fib (lambda (:args [n : int64]) (:returns int64)
   (if (< n 2) n (+ (fib (- n 1)) (fib (- n 2))))))
 (fib 10)"""
         assert run(src) == 55
 
     def test_gcd(self):
-        src = """(let gcd (lambda (:args (a int64) (b int64)) (:returns int64)
+        src = """(let gcd (lambda (:args [a : int64] [b : int64]) (:returns int64)
   (if (= b 0) a (gcd b (mod a b)))))
 (gcd 48 18)"""
         assert run(src) == 6

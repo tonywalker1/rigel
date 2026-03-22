@@ -82,7 +82,7 @@ def _read_sexprs(tokens: list[Token]) -> list[SExpr]:
         elif tok.kind == TokenKind.RPAREN:
             raise ParseError("unexpected ')'", tok.span)
         elif tok.kind == TokenKind.LBRACKET:
-            raise ParseError("unexpected '['", tok.span)
+            return read_list(TokenKind.LBRACKET, TokenKind.RBRACKET)
         elif tok.kind == TokenKind.RBRACKET:
             raise ParseError("unexpected ']'", tok.span)
         else:
@@ -290,30 +290,33 @@ def _parse_lambda(sexpr: list[SExpr]) -> LambdaForm:
 
 
 def _parse_params(items: list[SExpr], parent_span: Span) -> list[Param]:
-    """Parse parameter list: each item is (name type) or (name type default)."""
+    """Parse parameter list: each item is [name : type] or [name : type default]."""
     params: list[Param] = []
     for item in items:
         if not isinstance(item, list):
-            raise ParseError("parameter must be a list (name type)", parent_span)
-        if len(item) < 2:
-            raise ParseError("parameter requires name and type", _span_of_sexpr(item))
+            raise ParseError("parameter must be a bracketed list [name : type]", parent_span)
+        if len(item) < 3:
+            raise ParseError("parameter requires [name : type]", _span_of_sexpr(item))
         name = _expect_symbol(item[0], "parameter")
-        type_ann = _recognize(item[1])
-        default = _recognize(item[2]) if len(item) > 2 else None
+        colon = item[1]
+        if not (isinstance(colon, Symbol) and colon.name == ":"):
+            raise ParseError("parameter syntax is [name : type]", _span_of_sexpr(item))
+        type_ann = _recognize(item[2])
+        default = _recognize(item[3]) if len(item) > 3 else None
         params.append(Param(name=name, type_ann=type_ann, default=default, span=_span_of_sexpr(item)))
     return params
 
 
 def _parse_captures(items: list[SExpr], parent_span: Span) -> list[Capture]:
-    """Parse capture list: each item is (name) or (name :mut)."""
+    """Parse capture list: each item is [name] or [name mut]."""
     captures: list[Capture] = []
     for item in items:
         if not isinstance(item, list):
-            raise ParseError("capture must be a list", parent_span)
+            raise ParseError("capture must be a bracketed list [name] or [name mut]", parent_span)
         if not item:
             raise ParseError("empty capture", parent_span)
         name = _expect_symbol(item[0], "capture")
-        mut = any(isinstance(e, Symbol) and e.name == ":mut" for e in item[1:])
+        mut = any(isinstance(e, Symbol) and e.name == "mut" for e in item[1:])
         captures.append(Capture(name=name, mut=mut, span=_span_of_sexpr(item)))
     return captures
 

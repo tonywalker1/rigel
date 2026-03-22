@@ -40,7 +40,7 @@ class TestLet:
         assert isinstance(node.value, IntLiteral)
 
     def test_let_with_lambda(self):
-        node = parse_one("(let add (lambda (:args (a int64) (b int64)) (:returns int64) (+ a b)))")
+        node = parse_one("(let add (lambda (:args [a : int64] [b : int64]) (:returns int64) (+ a b)))")
         assert isinstance(node, LetForm)
         assert node.name.name == "add"
         assert isinstance(node.value, LambdaForm)
@@ -69,7 +69,7 @@ class TestLambda:
     """lambda form parsing."""
 
     def test_lambda_minimal(self):
-        node = parse_one("(lambda (:args (x int64)) x)")
+        node = parse_one("(lambda (:args [x : int64]) x)")
         assert isinstance(node, LambdaForm)
         assert len(node.params) == 1
         assert node.params[0].name.name == "x"
@@ -78,7 +78,7 @@ class TestLambda:
         assert len(node.body) == 1
 
     def test_lambda_full(self):
-        src = "(lambda (:args (x int64) (y int64)) (:capture (z)) (:returns int64) (:with (io)) (+ x y))"
+        src = "(lambda (:args [x : int64] [y : int64]) (:capture [z]) (:returns int64) (:with (io)) (+ x y))"
         node = parse_one(src)
         assert isinstance(node, LambdaForm)
         assert len(node.params) == 2
@@ -91,7 +91,7 @@ class TestLambda:
         assert len(node.body) == 1
 
     def test_lambda_parameter_default(self):
-        node = parse_one("(lambda (:args (x int64 42)) x)")
+        node = parse_one("(lambda (:args [x : int64 42]) x)")
         assert isinstance(node, LambdaForm)
         assert len(node.params) == 1
         assert node.params[0].default is not None
@@ -99,7 +99,7 @@ class TestLambda:
         assert node.params[0].default.value == 42
 
     def test_lambda_mutable_capture(self):
-        node = parse_one("(lambda (:args (x int64)) (:capture (z :mut)) x)")
+        node = parse_one("(lambda (:args [x : int64]) (:capture [z mut]) x)")
         assert isinstance(node, LambdaForm)
         assert len(node.captures) == 1
         assert node.captures[0].name.name == "z"
@@ -107,7 +107,7 @@ class TestLambda:
 
     def test_lambda_no_body(self):
         with pytest.raises(ParseError, match="body"):
-            parse_one("(lambda (:args (x int64)))")
+            parse_one("(lambda (:args [x : int64]))")
 
 
 class TestType:
@@ -126,19 +126,19 @@ class TestType:
         assert isinstance(node.invariant, CallForm)
 
     def test_type_with_constructor(self):
-        node = parse_one("(type (:fields (x int64)) (:constructor (lambda (:args (v int64)) v)))")
+        node = parse_one("(type (:fields (x int64)) (:constructor (lambda (:args [v : int64]) v)))")
         assert isinstance(node, TypeForm)
         assert node.constructor is not None
         assert isinstance(node.constructor, LambdaForm)
 
     def test_type_with_viewer(self):
-        node = parse_one("(type (:fields (x int64)) (:viewer (lambda (:args (self self-type)) (.x self))))")
+        node = parse_one("(type (:fields (x int64)) (:viewer (lambda (:args [self : self-type]) (.x self))))")
         assert isinstance(node, TypeForm)
         assert node.viewer is not None
         assert isinstance(node.viewer, LambdaForm)
 
     def test_type_with_release(self):
-        node = parse_one("(type (:fields (handle int64)) (:release (lambda (:args (self self-type)) (close self))))")
+        node = parse_one("(type (:fields (handle int64)) (:release (lambda (:args [self : self-type]) (close self))))")
         assert isinstance(node, TypeForm)
         assert node.release is not None
         assert isinstance(node.release, LambdaForm)
@@ -230,7 +230,7 @@ class TestModule:
     """module form parsing."""
 
     def test_module(self):
-        src = "(module math (:export add sub) (let add (lambda (:args (a int64)) a)))"
+        src = "(module math (:export add sub) (let add (lambda (:args [a : int64]) a)))"
         node = parse_one(src)
         assert isinstance(node, ModuleForm)
         assert node.name.name == "math"
@@ -323,7 +323,7 @@ class TestNesting:
     """Nested and composed expressions."""
 
     def test_let_binding_lambda(self):
-        src = "(let inc (lambda (:args (x int64)) (:returns int64) (+ x 1)))"
+        src = "(let inc (lambda (:args [x : int64]) (:returns int64) (+ x 1)))"
         node = parse_one(src)
         assert isinstance(node, LetForm)
         assert isinstance(node.value, LambdaForm)

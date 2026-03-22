@@ -30,8 +30,8 @@ sum
 class TestFunctionComposition:
     def test_compose(self):
         src = """
-(let double (lambda (:args (x int64)) (:returns int64) (* x 2)))
-(let add1 (lambda (:args (x int64)) (:returns int64) (+ x 1)))
+(let double (lambda (:args [x : int64]) (:returns int64) (* x 2)))
+(let add1 (lambda (:args [x : int64]) (:returns int64) (+ x 1)))
 (add1 (double 5))
 """
         assert run(src) == 11
@@ -40,7 +40,7 @@ class TestFunctionComposition:
 class TestRecursiveGCD:
     def test_gcd(self):
         src = """
-(let gcd (lambda (:args (a int64) (b int64)) (:returns int64)
+(let gcd (lambda (:args [a : int64] [b : int64]) (:returns int64)
   (if (= b 0) a (gcd b (mod a b)))))
 (gcd 48 18)
 """
@@ -48,7 +48,7 @@ class TestRecursiveGCD:
 
     def test_gcd_coprime(self):
         src = """
-(let gcd (lambda (:args (a int64) (b int64)) (:returns int64)
+(let gcd (lambda (:args [a : int64] [b : int64]) (:returns int64)
   (if (= b 0) a (gcd b (mod a b)))))
 (gcd 17 13)
 """
@@ -58,7 +58,7 @@ class TestRecursiveGCD:
 class TestEffectDrivenErrorHandling:
     def test_safe_div_zero(self):
         src = """
-(let safe-div (lambda (:args (a int64) (b int64)) (:returns int64) (:with (fail))
+(let safe-div (lambda (:args [a : int64] [b : int64]) (:returns int64) (:with (fail))
   (if (= b 0)
     (raise fail "division by zero")
     (/ a b))))
@@ -68,7 +68,7 @@ class TestEffectDrivenErrorHandling:
 
     def test_safe_div_nonzero(self):
         src = """
-(let safe-div (lambda (:args (a int64) (b int64)) (:returns int64) (:with (fail))
+(let safe-div (lambda (:args [a : int64] [b : int64]) (:returns int64) (:with (fail))
   (if (= b 0)
     (raise fail "division by zero")
     (/ a b))))
@@ -80,7 +80,7 @@ class TestEffectDrivenErrorHandling:
 class TestNestedControlFlow:
     def test_classify(self):
         src = """
-(let classify (lambda (:args (n int64)) (:returns string)
+(let classify (lambda (:args [n : int64]) (:returns string)
   (cond
     ((< n 0) "negative")
     ((= n 0) "zero")
@@ -91,7 +91,7 @@ class TestNestedControlFlow:
 
     def test_classify_zero(self):
         src = """
-(let classify (lambda (:args (n int64)) (:returns string)
+(let classify (lambda (:args [n : int64]) (:returns string)
   (cond
     ((< n 0) "negative")
     ((= n 0) "zero")
@@ -102,7 +102,7 @@ class TestNestedControlFlow:
 
     def test_classify_positive(self):
         src = """
-(let classify (lambda (:args (n int64)) (:returns string)
+(let classify (lambda (:args [n : int64]) (:returns string)
   (cond
     ((< n 0) "negative")
     ((= n 0) "zero")
@@ -115,9 +115,9 @@ class TestNestedControlFlow:
 class TestMultiFunction:
     def test_abs_then_double(self):
         src = """
-(let abs (lambda (:args (n int64)) (:returns int64)
+(let abs (lambda (:args [n : int64]) (:returns int64)
   (if (< n 0) (* n -1) n)))
-(let double (lambda (:args (n int64)) (:returns int64) (* n 2)))
+(let double (lambda (:args [n : int64]) (:returns int64) (* n 2)))
 (double (abs -3))
 """
         assert run(src) == 6

@@ -149,14 +149,14 @@ class TestNameResolution:
         assert call.ty == INT64
 
     def test_lambda_params_in_scope(self):
-        r = check_one("(lambda (:args (x int64)) (:returns int64) x)")
+        r = check_one("(lambda (:args [x : int64]) (:returns int64) x)")
         assert isinstance(r, TLambdaForm)
         assert r.body[0].ty == INT64
 
     def test_lambda_params_not_in_outer_scope(self):
         # x is defined inside the lambda, not accessible outside
         with pytest.raises(NameError_, match="undefined name: x"):
-            check_all("(let f (lambda (:args (x int64)) (:returns int64) x)) x")
+            check_all("(let f (lambda (:args [x : int64]) (:returns int64) x)) x")
 
 
 # --- §3.2 Lambda type checking ---
@@ -165,7 +165,7 @@ class TestLambda:
     """Spec §3.2: lambda type checking — params, return type, body."""
 
     def test_lambda_type_is_fn_type(self):
-        r = check_one("(lambda (:args (a int64) (b int64)) (:returns int64) (+ a b))")
+        r = check_one("(lambda (:args [a : int64] [b : int64]) (:returns int64) (+ a b))")
         assert isinstance(r, TLambdaForm)
         assert isinstance(r.ty, FnType)
         assert r.ty.params == (INT64, INT64)
@@ -173,17 +173,17 @@ class TestLambda:
 
     def test_lambda_body_type_must_match_return(self):
         with pytest.raises(TypeError_, match="does not match"):
-            check_one('(lambda (:args (x int64)) (:returns bool) x)')
+            check_one('(lambda (:args [x : int64]) (:returns bool) x)')
 
     def test_lambda_no_return_type_defaults_to_unit(self):
         # No :returns means default return type is unit.
         # Body returning int64 is a type mismatch.
         with pytest.raises(TypeError_, match="does not match"):
-            check_one("(lambda (:args (x int64)) x)")
+            check_one("(lambda (:args [x : int64]) x)")
 
     def test_let_binding_lambda_records_fn_type(self):
         results = check_all(
-            "(let add (lambda (:args (a int64) (b int64)) (:returns int64) (+ a b)))"
+            "(let add (lambda (:args [a : int64] [b : int64]) (:returns int64) (+ a b)))"
         )
         let_form = results[0]
         assert isinstance(let_form, TLetForm)
@@ -192,7 +192,7 @@ class TestLambda:
 
     def test_call_lambda_checks_arg_types(self):
         results = check_all("""
-            (let add (lambda (:args (a int64) (b int64)) (:returns int64) (+ a b)))
+            (let add (lambda (:args [a : int64] [b : int64]) (:returns int64) (+ a b)))
             (add 1 2)
         """)
         call = results[1]
@@ -202,14 +202,14 @@ class TestLambda:
     def test_call_wrong_arg_count_raises(self):
         with pytest.raises(TypeError_, match="expects 2 arguments"):
             check_all("""
-                (let add (lambda (:args (a int64) (b int64)) (:returns int64) (+ a b)))
+                (let add (lambda (:args [a : int64] [b : int64]) (:returns int64) (+ a b)))
                 (add 1)
             """)
 
     def test_call_wrong_arg_type_raises(self):
         with pytest.raises(TypeError_, match="argument 1"):
             check_all("""
-                (let add (lambda (:args (a int64) (b int64)) (:returns int64) (+ a b)))
+                (let add (lambda (:args [a : int64] [b : int64]) (:returns int64) (+ a b)))
                 (add true 2)
             """)
 
@@ -222,7 +222,7 @@ class TestCaptures:
     def test_capture_resolves_from_outer_scope(self):
         results = check_all("""
             (let total 100)
-            (let get-total (lambda (:capture (total)) (:returns int64) total))
+            (let get-total (lambda (:capture [total]) (:returns int64) total))
         """)
         lam = results[1].value
         assert isinstance(lam, TLambdaForm)
@@ -230,7 +230,7 @@ class TestCaptures:
 
     def test_capture_undefined_raises(self):
         with pytest.raises(NameError_, match="undefined capture"):
-            check_one("(lambda (:capture (x)) (:returns int64) x)")
+            check_one("(lambda (:capture [x]) (:returns int64) x)")
 
 
 # --- §3.3 Control flow ---
@@ -273,7 +273,7 @@ class TestEffects:
     def test_raise_in_effectful_lambda_ok(self):
         # §8.3: :with (fail) allows raise fail
         r = check_one(
-            '(lambda (:args (x int64)) (:returns int64) (:with (fail)) (raise fail "bad"))'
+            '(lambda (:args [x : int64]) (:returns int64) (:with (fail)) (raise fail "bad"))'
         )
         assert isinstance(r, TLambdaForm)
         assert "fail" in r.effects
@@ -282,17 +282,17 @@ class TestEffects:
         # §8.3: calling a function with effects from a pure context is an error
         with pytest.raises(EffectError, match="missing"):
             check_all("""
-                (let greet (lambda (:args (name string)) (:returns unit) (:with (io))
+                (let greet (lambda (:args [name : string]) (:returns unit) (:with (io))
                   (println name)))
-                (let pure-fn (lambda (:args (name string)) (:returns unit)
+                (let pure-fn (lambda (:args [name : string]) (:returns unit)
                   (greet name)))
             """)
 
     def test_calling_effectful_from_effectful_ok(self):
         results = check_all("""
-            (let greet (lambda (:args (name string)) (:returns unit) (:with (io))
+            (let greet (lambda (:args [name : string]) (:returns unit) (:with (io))
               (println name)))
-            (let main (lambda (:args (name string)) (:returns unit) (:with (io))
+            (let main (lambda (:args [name : string]) (:returns unit) (:with (io))
               (greet name)))
         """)
         main_fn = results[1].value
@@ -331,7 +331,7 @@ class TestFullPipeline:
 
     def test_function_definition_and_call(self):
         results = check_all("""
-            (let double (lambda (:args (n int64)) (:returns int64) (+ n n)))
+            (let double (lambda (:args [n : int64]) (:returns int64) (+ n n)))
             (double 21)
         """)
         assert results[1].ty == INT64
@@ -340,7 +340,7 @@ class TestFullPipeline:
         results = check_all("""
             (let a 5)
             (let b 10)
-            (let sum (lambda (:args (x int64) (y int64)) (:returns int64) (+ x y)))
+            (let sum (lambda (:args [x : int64] [y : int64]) (:returns int64) (+ x y)))
             (sum a b)
         """)
         assert results[3].ty == INT64
@@ -355,7 +355,7 @@ class TestFullPipeline:
     def test_effectful_program(self):
         """A small program with effects: function that does IO, called from main."""
         results = check_all("""
-            (let greet (lambda (:args (name string)) (:returns unit) (:with (io))
+            (let greet (lambda (:args [name : string]) (:returns unit) (:with (io))
               (println name)))
             (let main (lambda (:returns unit) (:with (io))
               (greet "world")))
@@ -441,7 +441,7 @@ class TestPolymorphicBuiltins:
     def test_lambda_with_int32_arithmetic(self):
         """Lambda using int32 arithmetic — proves polymorphic builtins work through function bodies."""
         results = check_all("""
-            (let add32 (lambda (:args (a int32) (b int32)) (:returns int32) (+ a b)))
+            (let add32 (lambda (:args [a : int32] [b : int32]) (:returns int32) (+ a b)))
             (add32 1:int32 2:int32)
         """)
         assert results[1].ty == INT32

@@ -73,6 +73,30 @@ Read `docs/rigel-spec.md` for full details. Brief summary of non-obvious choices
 - The collaboration is highly collaborative: the lead designer proposes core ideas, the assistant
   fills in details (effects system, C compilation strategy, grammar, examples)
 
+## Implementation Notes
+
+### Upstream IR Audits
+Before implementing any compiler phase, audit that all upstream IR nodes carry the data the new
+phase needs. Walk each `TXxxForm` and verify every field the evaluator/emitter needs is present.
+Missing fields require a checker change first, before any interpreter/codegen work begins.
+
+### Current Checked IR Invariants
+- `TLetForm.mutable: bool` — needed by interpreter to enforce set() permission
+- `THandleForm.handlers: list[tuple[str, list[str], TypedExpr]]` — carries
+  `(effect_name, param_names, handler_body)` so the interpreter can bind effect args to params
+- Wildcard `_` in match patterns is handled specially in both checker (`_check_match`) and
+  interpreter (`_eval_match`) — not looked up as a name
+
+### Bracket Syntax Is Canonical
+Lambda parameters use `[name : type]` syntax. Paren syntax `(name type)` is legacy and should
+not appear in new code, tests, or examples. Captures use `[name]` (mutable: `[mut name]`).
+
+### Plans Must Stay Ahead of Implementation
+The user implements independently and rapidly once plans are in place. Stub plans are liabilities.
+When asked to elaborate plans, treat it as urgent work-in-progress, not documentation cleanup.
+Each plan should include a **"Prerequisites / Upstream Gaps"** section listing what needs to be
+fixed in previous phases before this plan can be implemented cleanly.
+
 ## Possible Next Steps
 
 - Start implementing a parser or transpiler
